@@ -13,15 +13,15 @@ Real-time dashboard for monitoring AI agent squads. Built for the Moltbot/OpenCl
 ## Quick Start
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (use pnpm)
+pnpm install
 
 # Run development server (frontend + API)
-npm start
+pnpm start
 
 # Or run separately:
-npm run dev      # Frontend on port 3000
-npm run server   # API on port 3001
+pnpm run dev      # Frontend on port 3000
+pnpm run server   # API on port 3001
 ```
 
 ## Architecture
