@@ -26,7 +26,7 @@ export default function TaskCard({ task, column }) {
   const { title, description, priority = 'medium', agent, tags = [], created, comments } = task
 
   return (
-    <div className="bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group">
+    <div className="task-card bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group touch-target">
       {priority && (
         <div className="mb-2">
           <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-medium ${priorityColors[priority]}`}>
@@ -35,12 +35,12 @@ export default function TaskCard({ task, column }) {
         </div>
       )}
       
-      <h3 className="text-sm font-medium text-white mb-1 group-hover:text-blue-400 transition-colors">
+      <h3 className="task-card-title text-sm font-medium text-white mb-1 group-hover:text-blue-400 transition-colors">
         {title}
       </h3>
       
       {description && (
-        <p className="text-xs text-gray-400 mb-3 line-clamp-2">{description}</p>
+        <p className="task-card-description text-xs text-gray-400 mb-3 line-clamp-2">{description}</p>
       )}
 
       <div className="flex items-center justify-between mt-3">

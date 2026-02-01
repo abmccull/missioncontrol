@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function Header({ activeCount, totalCount }) {
+export default function Header({ activeCount, totalCount, onMenuClick }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -26,14 +26,25 @@ export default function Header({ activeCount, totalCount }) {
   }
 
   return (
-    <header className="bg-[#1a1f2e] border-b border-gray-700 px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-6">
+    <header className="header-container bg-[#1a1f2e] border-b border-gray-700 px-4 md:px-6 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-4 md:gap-6 header-brand">
+        {/* Mobile hamburger menu */}
+        <button 
+          className="hamburger-btn touch-target"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
         <div className="flex items-center gap-2">
-          <span className="text-xl">🎯</span>
-          <h1 className="text-lg font-semibold text-white">Mission Control</h1>
+          <span className="text-lg md:text-xl">🎯</span>
+          <h1 className="text-base md:text-lg font-semibold text-white">Mission Control</h1>
         </div>
         
-        <div className="flex items-center gap-4 text-sm text-gray-400">
+        <div className="header-dropdown hidden md:flex items-center gap-4 text-sm text-gray-400">
           <div className="flex items-center gap-2 bg-[#242b3d] px-3 py-1.5 rounded-lg">
             <span>All Products</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,30 +54,35 @@ export default function Header({ activeCount, totalCount }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-3 md:gap-6">
+        {/* Stats - hidden on mobile */}
+        <div className="header-stats hidden lg:flex items-center gap-4 text-sm">
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{activeCount}</div>
-            <div className="text-xs text-gray-400 uppercase">Agents Active</div>
+            <div className="text-xl md:text-2xl font-bold text-white">{activeCount}</div>
+            <div className="text-[10px] md:text-xs text-gray-400 uppercase">Agents Active</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{totalCount - activeCount}</div>
-            <div className="text-xs text-gray-400 uppercase">Tasks in Queue</div>
+            <div className="text-xl md:text-2xl font-bold text-white">{totalCount - activeCount}</div>
+            <div className="text-[10px] md:text-xs text-gray-400 uppercase">Tasks in Queue</div>
           </div>
         </div>
 
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-          <span>+</span> New Task
+        {/* New Task button */}
+        <button className="header-new-task bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-colors touch-target">
+          <span>+</span>
+          <span className="hidden sm:inline">New Task</span>
         </button>
 
-        <div className="text-right">
+        {/* Time - hidden on mobile */}
+        <div className="header-time hidden md:block text-right">
           <div className="text-lg font-mono text-white">{formatTime(time)}</div>
           <div className="text-xs text-gray-400">{formatDate(time)}</div>
         </div>
 
-        <div className="flex items-center gap-2 text-green-400">
+        {/* Online status */}
+        <div className="header-status flex items-center gap-1 md:gap-2 text-green-400">
           <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-          <span className="text-sm font-medium">ONLINE</span>
+          <span className="text-xs md:text-sm font-medium hidden sm:inline">ONLINE</span>
         </div>
       </div>
     </header>

@@ -41,3 +41,403 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #374151;
 }
+
+/* ==========================================
+   MOBILE RESPONSIVE STYLES
+   ========================================== */
+
+/* Touch-friendly tap targets (minimum 44px) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile bottom navigation */
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid #374151;
+  padding: 8px 0;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+  z-index: 100;
+  display: none;
+}
+
+/* Hamburger menu button */
+.hamburger-btn {
+  display: none;
+  padding: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: white;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: currentColor;
+  margin: 5px 0;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+/* Mobile sidebar overlay */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+.sidebar-overlay.active {
+  display: block;
+}
+
+/* Mobile sidebar slide-in */
+.mobile-sidebar {
+  transform: translateX(-100%);
+  transition: transform 0.3s ease-in-out;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 50;
+  width: 280px;
+  max-width: 85vw;
+}
+
+.mobile-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Collapsible section styles */
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  min-height: 44px;
+}
+
+.collapsible-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.collapsible-content.collapsed {
+  max-height: 0;
+}
+
+/* Swipeable container */
+.swipe-container {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.swipe-container::-webkit-scrollbar {
+  display: none;
+}
+
+.swipe-item {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* ==========================================
+   TABLET BREAKPOINT (768px - 1199px)
+   ========================================== */
+@media (max-width: 1199px) {
+  /* Main layout: 2 columns - hide LiveFeed or move to bottom */
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .agent-panel {
+    width: 220px;
+  }
+
+  .mission-queue {
+    flex: 1;
+  }
+
+  /* 2-column mission grid on tablet */
+  .mission-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .live-feed {
+    width: 100%;
+    max-height: 300px;
+    border-left: none;
+    border-top: 1px solid #374151;
+  }
+
+  /* Compact header on tablet */
+  .header-stats {
+    gap: 16px;
+  }
+
+  .header-stats > div {
+    min-width: auto;
+  }
+}
+
+/* ==========================================
+   MOBILE BREAKPOINT (< 768px)
+   ========================================== */
+@media (max-width: 767px) {
+  /* Show hamburger menu */
+  .hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Show mobile bottom nav */
+  .mobile-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    min-width: 64px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .mobile-nav-item.active {
+    color: var(--accent-blue);
+  }
+
+  .mobile-nav-item svg {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+  }
+
+  .mobile-nav-item span {
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  /* Hide desktop sidebars */
+  .desktop-sidebar {
+    display: none;
+  }
+
+  /* Full width main content */
+  .main-content {
+    width: 100%;
+    padding: 12px;
+    padding-bottom: 80px; /* Space for bottom nav */
+  }
+
+  /* Single column mission grid */
+  .mission-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* Or horizontal scrollable columns */
+  .mission-grid.swipeable {
+    display: flex !important;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+
+  .mission-grid.swipeable > div {
+    min-width: 280px;
+    width: 85vw;
+    max-width: 320px;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+
+  /* Compact header */
+  .header-container {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-brand {
+    flex: 1;
+  }
+
+  .header-brand h1 {
+    font-size: 14px;
+  }
+
+  .header-dropdown {
+    display: none;
+  }
+
+  .header-stats {
+    display: none;
+  }
+
+  .header-time {
+    display: none;
+  }
+
+  .header-status {
+    font-size: 12px;
+  }
+
+  .header-new-task {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  /* Compact agent cards */
+  .agent-card {
+    padding: 10px;
+  }
+
+  .agent-card-emoji {
+    font-size: 14px;
+  }
+
+  .agent-card-name {
+    font-size: 12px;
+  }
+
+  .agent-card-role {
+    font-size: 10px;
+  }
+
+  /* Compact task cards */
+  .task-card {
+    padding: 10px;
+  }
+
+  .task-card-title {
+    font-size: 13px;
+  }
+
+  .task-card-description {
+    font-size: 11px;
+    -webkit-line-clamp: 2;
+  }
+
+  /* Feed items */
+  .feed-item {
+    padding: 8px;
+  }
+
+  .feed-item-text {
+    font-size: 11px;
+  }
+
+  /* Section headers - collapsible */
+  .section-header {
+    padding: 12px;
+    cursor: pointer;
+  }
+
+  .section-header::after {
+    content: '▼';
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+
+  .section-header.collapsed::after {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ==========================================
+   SMALL MOBILE (< 375px)
+   ========================================== */
+@media (max-width: 374px) {
+  .mission-grid.swipeable > div {
+    min-width: 260px;
+    width: 90vw;
+  }
+
+  .mobile-nav-item {
+    padding: 8px 12px;
+    min-width: 56px;
+  }
+
+  .mobile-nav-item span {
+    font-size: 9px;
+  }
+}
+
+/* ==========================================
+   LANDSCAPE MOBILE
+   ========================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+  .mobile-nav {
+    padding: 4px 0;
+  }
+
+  .mobile-nav-item {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .mobile-nav-item svg {
+    margin-bottom: 0;
+  }
+}
+
+/* ==========================================
+   ANIMATIONS & TRANSITIONS
+   ========================================== */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smooth scroll for iOS */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area padding for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .mobile-nav {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .main-content {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
