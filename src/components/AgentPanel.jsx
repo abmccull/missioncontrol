@@ -27,46 +27,54 @@ export default function AgentPanel({ agents, loading }) {
   const standbyCount = displayAgents.filter(a => a.status === 'standby').length
 
   return (
-    <aside className="w-64 bg-[#1a1f2e] border-r border-gray-700 flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Agents</h2>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400">{displayAgents.length}</span>
-            <button className="text-gray-400 hover:text-white">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
+    <aside className="w-56 bg-[#1a1f2e] border-r border-gray-700/50 flex flex-col">
+      {/* Header */}
+      <div className="p-3 border-b border-gray-700/50">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Agents</h2>
+            <span className="text-[10px] text-gray-500">{displayAgents.length}</span>
           </div>
+          <button className="text-gray-400 hover:text-white w-5 h-5 flex items-center justify-center rounded hover:bg-[#242b3d] transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
         </div>
-        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400 flex-wrap">
+        
+        {/* Status Summary */}
+        <div className="flex items-center gap-3 text-[10px]">
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-            {activeCount} active
+            <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+            <span className="text-green-400">{activeCount} active</span>
           </span>
           {blockedCount > 0 && (
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-              {blockedCount} blocked
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+              <span className="text-red-400">{blockedCount}</span>
             </span>
           )}
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
-            {standbyCount} standby
-          </span>
+          {standbyCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full"></span>
+              <span className="text-gray-400">{standbyCount}</span>
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      {/* Agent List */}
+      <div className="flex-1 overflow-y-auto p-1.5">
         {loading ? (
-          <div className="flex items-center justify-center h-32 text-gray-400">
-            <span className="animate-pulse">Loading agents...</span>
+          <div className="flex items-center justify-center h-24 text-gray-500 text-xs animate-pulse">
+            Loading agents...
           </div>
         ) : (
-          displayAgents.map((agent, idx) => (
-            <AgentCard key={agent.name || idx} agent={agent} />
-          ))
+          <div className="space-y-0.5">
+            {displayAgents.map((agent, idx) => (
+              <AgentCard key={agent.name || idx} agent={agent} />
+            ))}
+          </div>
         )}
       </div>
     </aside>
