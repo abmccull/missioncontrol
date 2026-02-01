@@ -15,39 +15,60 @@ const MEMORY_PATH = path.join(CLAWD_PATH, 'memory')
 app.use(cors())
 app.use(express.json())
 
-// Helper: Read SOUL.md and extract agent info
+// Known agent emojis and roles (from SQUAD.md)
+const AGENT_META = {
+  jarvis: { emoji: '🎯', role: 'Chief Orchestrator' },
+  hunter: { emoji: '🎯', role: 'Sales & Relationships' },
+  inbox: { emoji: '📧', role: 'Email Intelligence' },
+  money: { emoji: '💰', role: 'Revenue Intelligence' },
+  linkedin: { emoji: '💼', role: 'LinkedIn Growth' },
+  xpert: { emoji: '🐦', role: 'X/Twitter' },
+  dispatch: { emoji: '📰', role: 'Newsletter' },
+  scout: { emoji: '🔍', role: 'Research & Intel' },
+  forge: { emoji: '🔨', role: 'Builder/Developer' },
+  oracle: { emoji: '🔮', role: 'Trading Intelligence' },
+  vibe: { emoji: '🎨', role: 'Marketing Systems' },
+  sentinel: { emoji: '🛡️', role: 'Security & Ops' },
+  nexus: { emoji: '🔗', role: 'System Intelligence' },
+  claw: { emoji: '🦀', role: 'OpenClaw Specialist' },
+  critic: { emoji: '🎭', role: 'Quality Control' },
+}
+
+// Helper: Get agent info from AGENT_META (canonical source)
 async function parseAgentSoul(agentDir) {
-  try {
-    const soulPath = path.join(AGENTS_PATH, agentDir, 'SOUL.md')
-    const content = await fs.readFile(soulPath, 'utf-8')
-    
-    // Extract name (usually first heading)
-    const nameMatch = content.match(/^#\s*(.+)/m)
-    const name = nameMatch ? nameMatch[1].replace(/[^a-zA-Z]/g, '').toUpperCase() : agentDir.toUpperCase()
-    
-    // Extract emoji
-    const emojiMatch = content.match(/[\u{1F300}-\u{1F9FF}]/u)
-    const emoji = emojiMatch ? emojiMatch[0] : '🤖'
-    
-    // Extract role/title
-    const roleMatch = content.match(/(?:Role|Title|I am):\s*(.+)/i) || 
-                      content.match(/\*\*(.+?)\*\*/m)
-    const role = roleMatch ? roleMatch[1].trim() : 'Agent'
-    
-    return { name, emoji, role, dir: agentDir }
-  } catch {
-    return { name: agentDir.toUpperCase(), emoji: '🤖', role: 'Agent', dir: agentDir }
+  const meta = AGENT_META[agentDir.toLowerCase()] || {}
+  return { 
+    name: agentDir.toUpperCase(), 
+    emoji: meta.emoji || '🤖', 
+    role: meta.role || 'Agent', 
+    dir: agentDir 
   }
 }
 
 // Helper: Determine agent status from WORKING.md and session activity
 async function getAgentStatus(agentDir) {
   try {
-    const workingPath = path.join(AGENTS_PATH, agentDir, 'WORKING.md')
+    // WORKING.md is in memory/{agent}/WORKING.md, not agents/{agent}/
+    const workingPath = path.join(MEMORY_PATH, agentDir, 'WORKING.md')
     const stats = await fs.stat(workingPath)
     const mtime = stats.mtime.getTime()
     const now = Date.now()
     const ageMinutes = (now - mtime) / 1000 / 60
+    
+    // Also try to read the status from state.json
+    try {
+      const stateJson = path.join(CLAWD_PATH, 'dashboard', 'state.json')
+      const stateContent = await fs.readFile(stateJson, 'utf-8')
+      const state = JSON.parse(stateContent)
+      const agentState = state.agents?.[agentDir.toLowerCase()]
+      if (agentState) {
+        // Map state.json status to our status
+        if (agentState.status === 'active' || agentState.status === 'working') return 'working'
+        if (agentState.status === 'blocked') return 'blocked'
+        if (agentState.status === 'idle') return 'standby'
+        // Use file mtime as fallback
+      }
+    } catch {}
     
     // If WORKING.md was modified in last 5 minutes = working
     // If modified in last 30 minutes = standby  
@@ -60,27 +81,49 @@ async function getAgentStatus(agentDir) {
   }
 }
 
+// Helper: Get agent's current task from WORKING.md or state.json
+async function getAgentTask(agentDir) {
+  try {
+    // Try state.json first (has currentTask)
+    const stateJson = path.join(CLAWD_PATH, 'dashboard', 'state.json')
+    const stateContent = await fs.readFile(stateJson, 'utf-8')
+    const state = JSON.parse(stateContent)
+    const agentState = state.agents?.[agentDir.toLowerCase()]
+    if (agentState?.currentTask) {
+      return agentState.currentTask
+    }
+  } catch {}
+  
+  try {
+    // Fallback to WORKING.md first line
+    const workingPath = path.join(MEMORY_PATH, agentDir, 'WORKING.md')
+    const content = await fs.readFile(workingPath, 'utf-8')
+    const firstTask = content.match(/(?:Current|Status):\s*(.+)/i)
+    return firstTask ? firstTask[1].trim().slice(0, 60) : null
+  } catch {}
+  
+  return null
+}
+
 // GET /api/agents - List all agents with status
 app.get('/api/agents', async (req, res) => {
   try {
-    const dirs = await fs.readdir(AGENTS_PATH)
-    const agentDirs = []
+    // Use known agent list instead of scanning dirs
+    const knownAgents = Object.keys(AGENT_META)
     
-    for (const dir of dirs) {
-      const stat = await fs.stat(path.join(AGENTS_PATH, dir))
-      if (stat.isDirectory() && !dir.startsWith('.')) {
-        agentDirs.push(dir)
-      }
-    }
-    
-    const agents = await Promise.all(agentDirs.map(async (dir) => {
+    const agents = await Promise.all(knownAgents.map(async (dir) => {
       const soul = await parseAgentSoul(dir)
       const status = await getAgentStatus(dir)
-      return { ...soul, status, type: 'SPC' }
+      const currentTask = await getAgentTask(dir)
+      
+      // Determine agent type (JARVIS is EXEC, others are SPC)
+      const type = dir.toLowerCase() === 'jarvis' ? 'EXEC' : 'SPC'
+      
+      return { ...soul, status, type, currentTask }
     }))
     
-    // Sort: working first, then standby, then offline
-    const order = { working: 0, standby: 1, offline: 2 }
+    // Sort: working first, then blocked, then standby, then offline
+    const order = { working: 0, blocked: 1, standby: 2, offline: 3 }
     agents.sort((a, b) => order[a.status] - order[b.status])
     
     res.json({ agents })
@@ -165,27 +208,47 @@ function parseMissionFile(content, filename) {
 app.get('/api/feed', async (req, res) => {
   try {
     const feed = []
-    const today = new Date().toISOString().split('T')[0]
+    const knownAgents = Object.keys(AGENT_META)
     
-    // Check each agent's memory for today
-    const dirs = await fs.readdir(AGENTS_PATH).catch(() => [])
-    
-    for (const dir of dirs) {
+    // Check each agent's WORKING.md for recent activity
+    for (const agentDir of knownAgents) {
       try {
-        const memoryPath = path.join(AGENTS_PATH, dir, 'memory')
-        const todayFile = path.join(memoryPath, `${today}.md`)
+        const workingPath = path.join(MEMORY_PATH, agentDir, 'WORKING.md')
+        const content = await fs.readFile(workingPath, 'utf-8')
+        const stats = await fs.stat(workingPath)
+        const mtime = stats.mtime
+        const ageMinutes = (Date.now() - mtime.getTime()) / 1000 / 60
         
-        const content = await fs.readFile(todayFile, 'utf-8').catch(() => null)
-        if (content) {
-          // Extract recent entries (look for timestamps or bullet points)
-          const lines = content.split('\n').filter(l => l.trim().startsWith('-') || l.match(/\d{2}:\d{2}/))
+        // Only include recently active agents
+        if (ageMinutes < 60) {
+          // Extract recent entries from WORKING.md
+          const lines = content.split('\n')
           
-          for (const line of lines.slice(-5)) {
+          // Look for "This Session Summary" or recent bullet points
+          let inSummary = false
+          for (const line of lines) {
+            if (line.includes('This Session') || line.includes('Summary')) inSummary = true
+            if (inSummary && line.trim().startsWith('-')) {
+              feed.push({
+                id: `${agentDir}-${Date.now()}-${Math.random()}`,
+                agent: agentDir.toUpperCase(),
+                action: 'completed',
+                target: line.replace(/^[-*]\s*/, '').slice(0, 60),
+                time: ageMinutes < 5 ? 'just now' : `${Math.round(ageMinutes)}m ago`,
+                type: 'task'
+              })
+            }
+          }
+          
+          // Add status update based on current task
+          const taskMatch = content.match(/(?:Current Task|Status):\s*(.+)/i)
+          if (taskMatch) {
             feed.push({
-              agent: dir.toUpperCase(),
-              action: 'logged',
-              target: line.replace(/^[-*]\s*/, '').slice(0, 50),
-              time: 'today',
+              id: `${agentDir}-status-${Date.now()}`,
+              agent: agentDir.toUpperCase(),
+              action: 'is working on',
+              target: taskMatch[1].trim().slice(0, 50),
+              time: ageMinutes < 5 ? 'just now' : `${Math.round(ageMinutes)}m ago`,
               type: 'status'
             })
           }
@@ -193,10 +256,14 @@ app.get('/api/feed', async (req, res) => {
       } catch {}
     }
     
-    // Add some synthetic feed items based on file changes
-    // This would be enhanced with file watching in production
+    // Sort by recency (just now first)
+    feed.sort((a, b) => {
+      const aTime = a.time === 'just now' ? 0 : parseInt(a.time) || 999
+      const bTime = b.time === 'just now' ? 0 : parseInt(b.time) || 999
+      return aTime - bTime
+    })
     
-    res.json({ feed: feed.slice(0, 20) })
+    res.json({ feed: feed.slice(0, 30) })
   } catch (err) {
     console.error('Error fetching feed:', err)
     res.json({ feed: [] })

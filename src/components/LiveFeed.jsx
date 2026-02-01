@@ -1,28 +1,29 @@
 import { useState } from 'react'
 
+// Our actual agent squad emojis
 const agentEmojis = {
-  JARVIS: '🎯', FORGE: '🔨', SCHOLAR: '📚', SCRIBE: '✍️', SENTINEL: '🛡️',
-  ORACLE: '🔮', HERALD: '📢', MAVEN: '📊', NEXUS: '🔗', CIPHER: '🔐',
-  SAGE: '🧘', PIXEL: '🎨', ECHO: '🔊', ATLAS: '🗺️', TEMPO: '⏱️',
+  JARVIS: '🎯', HUNTER: '🎯', INBOX: '📧', MONEY: '💰', LINKEDIN: '💼',
+  XPERT: '🐦', DISPATCH: '📰', SCOUT: '🔍', FORGE: '🔨', ORACLE: '🔮',
+  VIBE: '🎨', SENTINEL: '🛡️', NEXUS: '🔗', CLAW: '🦀', CRITIC: '🎭',
 }
 
 const agentColors = {
-  JARVIS: 'text-purple-400', FORGE: 'text-blue-400', SCHOLAR: 'text-green-400',
-  SCRIBE: 'text-yellow-400', SENTINEL: 'text-red-400', ORACLE: 'text-indigo-400',
-  HERALD: 'text-orange-400', MAVEN: 'text-pink-400', NEXUS: 'text-cyan-400',
-  CIPHER: 'text-emerald-400', SAGE: 'text-teal-400', PIXEL: 'text-rose-400',
-  ECHO: 'text-violet-400', ATLAS: 'text-amber-400', TEMPO: 'text-lime-400',
+  JARVIS: 'text-purple-400', HUNTER: 'text-green-400', INBOX: 'text-blue-400',
+  MONEY: 'text-yellow-400', LINKEDIN: 'text-cyan-400', XPERT: 'text-sky-400',
+  DISPATCH: 'text-orange-400', SCOUT: 'text-emerald-400', FORGE: 'text-indigo-400',
+  ORACLE: 'text-violet-400', VIBE: 'text-pink-400', SENTINEL: 'text-red-400',
+  NEXUS: 'text-teal-400', CLAW: 'text-rose-400', CRITIC: 'text-amber-400',
 }
 
 const fallbackFeed = [
-  { id: 1, agent: 'FORGE', action: 'started working', target: 'Mission Control Dashboard', time: 'just now', type: 'status' },
-  { id: 2, agent: 'FORGE', action: 'created repository', target: 'missioncontrol', time: 'just now', type: 'task' },
-  { id: 3, agent: 'SAGE', action: 'moved to review', target: 'SEO Keyword Research', time: '2m ago', type: 'task' },
-  { id: 4, agent: 'SAGE', action: 'commented on', target: 'SEO Keyword Research', time: '2m ago', type: 'comment' },
-  { id: 5, agent: 'SCHOLAR', action: 'created document', target: 'AI Tools Comparison', time: '5m ago', type: 'doc' },
-  { id: 6, agent: 'PIXEL', action: 'is now working', target: null, time: '10m ago', type: 'status' },
-  { id: 7, agent: 'JARVIS', action: 'assigned task to', target: 'FORGE', time: '15m ago', type: 'task' },
-  { id: 8, agent: 'SENTINEL', action: 'completed monitoring', target: 'System Health Check', time: '20m ago', type: 'task' },
+  { id: 1, agent: 'FORGE', action: 'started building', target: 'Mission Control Dashboard', time: 'just now', type: 'status' },
+  { id: 2, agent: 'SCOUT', action: 'completed', target: 'Evening intel roundup', time: '2m ago', type: 'task' },
+  { id: 3, agent: 'INBOX', action: 'triaged', target: '62 emails today', time: '5m ago', type: 'task' },
+  { id: 4, agent: 'LINKEDIN', action: 'drafted', target: 'Week 9 posts - 126 in pipeline', time: '10m ago', type: 'task' },
+  { id: 5, agent: 'DISPATCH', action: 'curating', target: 'Issue 4 content', time: '12m ago', type: 'task' },
+  { id: 6, agent: 'XPERT', action: 'blocked by', target: 'API rate limit (42+ hours)', time: '15m ago', type: 'status' },
+  { id: 7, agent: 'JARVIS', action: 'assigned', target: 'Dashboard build to FORGE', time: '20m ago', type: 'task' },
+  { id: 8, agent: 'CLAW', action: 'scanned', target: '60+ OpenClaw issues', time: '25m ago', type: 'task' },
 ]
 
 const tabs = ['All', 'Tasks', 'Comments', 'Docs', 'Status']
