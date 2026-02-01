@@ -184,28 +184,46 @@ app.get('/api/missions', async (req, res) => {
 
 function parseMissionFile(content, filename) {
   const titleMatch = content.match(/^#\s*(.+)/m)
-  const title = titleMatch ? titleMatch[1] : filename.replace('.md', '')
+  const title = titleMatch ? titleMatch[1].replace(/^(FORGE|Task|Mission):\s*/i, '').trim() : filename.replace('.md', '')
   
-  const statusMatch = content.match(/Status:\s*(\w+)/i)
-  const status = statusMatch ? statusMatch[1].toLowerCase() : 'queue'
+  // Get full status line
+  const statusLineMatch = content.match(/Status:\s*(.+)/i)
+  const statusLine = statusLineMatch ? statusLineMatch[1] : ''
+  
+  // Determine status category based on content
+  let status = 'queue'
+  if (statusLine.includes('✅') || statusLine.toLowerCase().includes('complete')) {
+    status = 'review' // Completed but in active/ = needs review
+  } else if (statusLine.toLowerCase().includes('progress') || 
+             statusLine.toLowerCase().includes('working') ||
+             content.toLowerCase().includes('in progress')) {
+    status = 'progress'
+  } else if (statusLine.toLowerCase().includes('blocked') ||
+             statusLine.toLowerCase().includes('waiting')) {
+    status = 'blocked'
+  }
   
   const priorityMatch = content.match(/Priority:\s*(\w+)/i)
   const priority = priorityMatch ? priorityMatch[1].toLowerCase() : 'medium'
   
-  const agentMatch = content.match(/(?:Assignee|Agent):\s*(\w+)/i)
+  // Look for assigned agent
+  const agentMatch = content.match(/(?:Assigned to|Assignee|Agent):\s*(\w+)/i) ||
+                     filename.match(/^(\w+)-/i)
   const agent = agentMatch ? agentMatch[1].toUpperCase() : null
   
-  const descMatch = content.match(/^(?!#)(.{10,100})/m)
-  const description = descMatch ? descMatch[1].trim() : ''
+  // Get description from objective or first paragraph
+  const objectiveMatch = content.match(/## Objective\s*\n+(.+)/i)
+  const descMatch = objectiveMatch || content.match(/\n\n([^#\n].{10,100})/m)
+  const description = descMatch ? descMatch[1].trim().slice(0, 80) : ''
   
   return {
     id: filename,
-    title,
+    title: title.slice(0, 50),
     description,
     status,
     priority,
     agent,
-    tags: [],
+    tags: priorityMatch && priority === 'critical' ? ['urgent'] : [],
     created: 'recently'
   }
 }
