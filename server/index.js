@@ -154,9 +154,10 @@ app.get('/api/missions', async (req, res) => {
           const content = await fs.readFile(path.join(activePath, file), 'utf-8')
           const mission = parseMissionFile(content, file)
           
-          // Categorize by status in file or default to queue
-          if (mission.status === 'in-progress') missions.progress.push(mission)
+          // Categorize by status
+          if (mission.status === 'progress') missions.progress.push(mission)
           else if (mission.status === 'review') missions.review.push(mission)
+          else if (mission.status === 'blocked') missions.queue.push(mission) // Show blocked in queue for now
           else missions.queue.push(mission)
         }
       }
@@ -186,9 +187,9 @@ function parseMissionFile(content, filename) {
   const titleMatch = content.match(/^#\s*(.+)/m)
   const title = titleMatch ? titleMatch[1].replace(/^(FORGE|Task|Mission):\s*/i, '').trim() : filename.replace('.md', '')
   
-  // Get full status line
-  const statusLineMatch = content.match(/Status:\s*(.+)/i)
-  const statusLine = statusLineMatch ? statusLineMatch[1] : ''
+  // Get full status line (handle markdown **bold**)
+  const statusLineMatch = content.match(/\*?\*?Status:\*?\*?\s*(.+)/i)
+  const statusLine = statusLineMatch ? statusLineMatch[1].replace(/^\*+\s*/, '') : ''
   
   // Determine status category based on content
   let status = 'queue'
