@@ -36,6 +36,25 @@ function App() {
     fetchData()
   }, [fetchData])
 
+  // Map status from server to column key
+  const statusToColumn = (status) => {
+    switch (status) {
+      case 'in_progress':
+      case 'progress':
+      case 'working':
+        return 'progress'
+      case 'review':
+      case 'reviewing':
+        return 'review'
+      case 'done':
+      case 'complete':
+      case 'completed':
+        return 'done'
+      default:
+        return 'queue'
+    }
+  }
+
   // Handle WebSocket messages
   useEffect(() => {
     if (!lastMessage) return
@@ -56,47 +75,70 @@ function App() {
         break
         
       case 'mission:update':
-      case 'mission:new':
+      case 'mission:new': {
+        const targetCol = statusToColumn(payload.status)
+        
         setMissions(prev => {
           const updated = { ...prev }
+          
           // Remove from all columns first
           for (const col of ['queue', 'progress', 'review', 'done']) {
-            updated[col] = updated[col].filter(m => m.id !== payload.id)
+            updated[col] = updated[col].filter(m => 
+              m.id !== payload.id && m.filename !== payload.filename
+            )
           }
-          // Add to appropriate column
-          const targetCol = payload.status || 'queue'
+          
+          // Add to appropriate column with timestamp for animation
+          const missionWithMeta = { 
+            ...payload, 
+            _updated: Date.now()
+          }
+          
           if (targetCol in updated) {
-            updated[targetCol] = [payload, ...updated[targetCol]]
+            updated[targetCol] = [missionWithMeta, ...updated[targetCol]]
           } else {
-            updated.queue = [payload, ...updated.queue]
+            updated.queue = [missionWithMeta, ...updated.queue]
           }
+          
           return updated
         })
         break
+      }
         
-      case 'mission:complete':
+      case 'mission:complete': {
+        const completedMission = {
+          id: payload.id,
+          filename: payload.filename,
+          title: payload.title || 'Task completed',
+          assigned_to: payload.assigned_to,
+          status: 'done',
+          _updated: Date.now()
+        }
+        
         setMissions(prev => ({
-          ...prev,
-          queue: prev.queue.filter(m => m.id !== payload.id),
-          progress: prev.progress.filter(m => m.id !== payload.id),
-          review: prev.review.filter(m => m.id !== payload.id),
-          done: [{ id: payload.id, status: 'done' }, ...prev.done.slice(0, 9)]
+          queue: prev.queue.filter(m => m.id !== payload.id && m.filename !== payload.filename),
+          progress: prev.progress.filter(m => m.id !== payload.id && m.filename !== payload.filename),
+          review: prev.review.filter(m => m.id !== payload.id && m.filename !== payload.filename),
+          done: [completedMission, ...prev.done.slice(0, 9)]
         }))
         break
+      }
         
       case 'mission:removed':
         setMissions(prev => ({
-          queue: prev.queue.filter(m => m.id !== payload.id),
-          progress: prev.progress.filter(m => m.id !== payload.id),
-          review: prev.review.filter(m => m.id !== payload.id),
+          queue: prev.queue.filter(m => m.id !== payload.id && m.filename !== payload.filename),
+          progress: prev.progress.filter(m => m.id !== payload.id && m.filename !== payload.filename),
+          review: prev.review.filter(m => m.id !== payload.id && m.filename !== payload.filename),
           done: prev.done
         }))
         break
         
       case 'feed:activity':
         setFeed(prev => {
-          const newFeed = [{ ...payload, _new: true }, ...prev.slice(0, 29)]
-          return newFeed
+          const newItem = { ...payload, _new: true }
+          // Avoid duplicates
+          const filtered = prev.filter(item => item.id !== payload.id)
+          return [newItem, ...filtered.slice(0, 49)]
         })
         break
         
@@ -127,7 +169,11 @@ function App() {
         <AgentPanel agents={agents} loading={loading} />
         
         {/* Center - Mission Queue */}
-        <MissionQueue missions={missions} loading={loading} />
+        <MissionQueue 
+          missions={missions} 
+          loading={loading} 
+          lastMessage={lastMessage}
+        />
         
         {/* Right Sidebar - Live Feed */}
         <LiveFeed feed={feed} loading={loading} isConnected={isConnected} />

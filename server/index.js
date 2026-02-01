@@ -6,9 +6,14 @@ import path from 'path'
 import { WebSocketServer } from 'ws'
 import { watch } from 'chokidar'
 import http from 'http'
-
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+
+import { 
+  parseMissionFile, 
+  shouldAutoArchive, 
+  getStatusTransitionAction 
+} from './missionParser.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,6 +27,20 @@ const CLAWD_PATH = process.env.CLAWD_PATH || '/home/node/clawd'
 const AGENTS_PATH = path.join(CLAWD_PATH, 'agents')
 const MISSION_CONTROL_PATH = path.join(CLAWD_PATH, 'mission-control')
 const MEMORY_PATH = path.join(CLAWD_PATH, 'memory')
+
+// Ensure completed directory exists
+const ACTIVE_PATH = path.join(MISSION_CONTROL_PATH, 'active')
+const COMPLETED_PATH = path.join(MISSION_CONTROL_PATH, 'completed')
+
+async function ensureDirectories() {
+  try {
+    await fs.mkdir(ACTIVE_PATH, { recursive: true })
+    await fs.mkdir(COMPLETED_PATH, { recursive: true })
+  } catch (err) {
+    console.error('Error creating directories:', err.message)
+  }
+}
+ensureDirectories()
 
 app.use(cors())
 app.use(express.json())
@@ -43,6 +62,30 @@ const AGENT_META = {
   nexus: { emoji: '🔗', role: 'System Intelligence', color: '#14b8a6' },
   claw: { emoji: '🦀', role: 'OpenClaw Specialist', color: '#f43f5e' },
   critic: { emoji: '🎭', role: 'Quality Control', color: '#84cc16' },
+}
+
+// ============================================
+// In-memory state for tracking missions
+// ============================================
+
+// Cache of parsed missions (filename -> mission object)
+const missionCache = new Map()
+
+// Activity feed (keep last 100 items)
+const activityFeed = []
+const MAX_FEED_ITEMS = 100
+
+function addToFeed(activity) {
+  const item = {
+    id: `${activity.agent || 'system'}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    timestamp: new Date().toISOString(),
+    ...activity
+  }
+  activityFeed.unshift(item)
+  if (activityFeed.length > MAX_FEED_ITEMS) {
+    activityFeed.pop()
+  }
+  return item
 }
 
 // ============================================
@@ -86,8 +129,8 @@ function broadcast(event) {
 // File watcher setup
 const watchPaths = [
   path.join(MEMORY_PATH, '*', 'WORKING.md'),
-  path.join(MISSION_CONTROL_PATH, 'active', '*.md'),
-  path.join(MISSION_CONTROL_PATH, 'completed', '*.md'),
+  path.join(ACTIVE_PATH, '*.md'),
+  path.join(COMPLETED_PATH, '*.md'),
   path.join(CLAWD_PATH, 'dashboard', 'state.json'),
 ]
 
@@ -110,6 +153,133 @@ function debounce(key, fn, delay = 500) {
     fn()
     debounceMap.delete(key)
   }, delay))
+}
+
+// Process mission file change
+async function handleMissionChange(filePath) {
+  const filename = path.basename(filePath)
+  
+  try {
+    const content = await fs.readFile(filePath, 'utf-8')
+    const mission = parseMissionFile(content, filename)
+    
+    // Get previous state for comparison
+    const previousMission = missionCache.get(filename)
+    const previousStatus = previousMission?.status
+    
+    // Update cache
+    missionCache.set(filename, mission)
+    
+    // Detect status changes
+    if (previousStatus && previousStatus !== mission.status) {
+      const action = getStatusTransitionAction(previousStatus, mission.status)
+      
+      // Add to activity feed
+      const feedItem = addToFeed({
+        agent: mission.assigned_to || 'SYSTEM',
+        action,
+        target: mission.title,
+        targetType: 'mission',
+        status: mission.status
+      })
+      
+      broadcast({
+        type: 'feed:activity',
+        payload: {
+          ...feedItem,
+          time: 'just now',
+          _new: true
+        }
+      })
+      
+      // Check for auto-archive
+      if (shouldAutoArchive(previousStatus, mission.status)) {
+        await autoArchiveMission(filePath, mission)
+        return // Don't broadcast update, archive will handle it
+      }
+    }
+    
+    // Detect assignment changes
+    if (previousMission && previousMission.assigned_to !== mission.assigned_to) {
+      const feedItem = addToFeed({
+        agent: mission.assigned_to || 'SYSTEM',
+        action: mission.assigned_to ? 'assigned to self' : 'unassigned',
+        target: mission.title,
+        targetType: 'mission'
+      })
+      
+      broadcast({
+        type: 'feed:activity',
+        payload: {
+          ...feedItem,
+          time: 'just now',
+          _new: true
+        }
+      })
+    }
+    
+    // Broadcast the update
+    broadcast({
+      type: 'mission:update',
+      payload: mission
+    })
+    
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading mission ${filename}:`, err.message)
+    }
+  }
+}
+
+// Auto-archive mission when status becomes done
+async function autoArchiveMission(filePath, mission) {
+  const filename = path.basename(filePath)
+  const completedPath = path.join(COMPLETED_PATH, filename)
+  
+  try {
+    // Move file to completed directory
+    await fs.rename(filePath, completedPath)
+    console.log(`Auto-archived: ${filename}`)
+    
+    // Remove from cache (will be re-added when watching completed dir)
+    missionCache.delete(filename)
+    
+    // Add completion to feed
+    const feedItem = addToFeed({
+      agent: mission.assigned_to || 'SYSTEM',
+      action: 'completed',
+      target: mission.title,
+      targetType: 'mission'
+    })
+    
+    // Broadcast completion event
+    broadcast({
+      type: 'mission:complete',
+      payload: {
+        id: mission.id,
+        filename,
+        title: mission.title,
+        assigned_to: mission.assigned_to
+      }
+    })
+    
+    broadcast({
+      type: 'feed:activity',
+      payload: {
+        ...feedItem,
+        time: 'just now',
+        _new: true
+      }
+    })
+    
+  } catch (err) {
+    console.error(`Error auto-archiving ${filename}:`, err.message)
+    // Still broadcast the update even if archive fails
+    broadcast({
+      type: 'mission:update',
+      payload: mission
+    })
+  }
 }
 
 watcher.on('change', async (filePath) => {
@@ -136,40 +306,41 @@ watcher.on('change', async (filePath) => {
           }
         })
         
-        // Also broadcast to feed
+        // Add to activity feed
+        const feedItem = addToFeed({
+          agent: agentDir.toUpperCase(),
+          action: status === 'working' ? 'is working on' : 'updated status',
+          target: task || 'standby',
+          targetType: 'status'
+        })
+        
         broadcast({
           type: 'feed:activity',
           payload: {
-            id: `${agentDir}-${Date.now()}`,
-            agent: agentDir.toUpperCase(),
-            action: status === 'working' ? 'is working' : 'updated',
-            target: task || 'status',
+            ...feedItem,
             time: 'just now',
-            type: 'status'
+            type: 'status',
+            _new: true
           }
         })
       }
-    } else if (filePath.includes('/mission-control/')) {
-      // Mission update
+    } else if (filePath.includes('/mission-control/active/')) {
+      await handleMissionChange(filePath)
+    } else if (filePath.includes('/mission-control/completed/')) {
+      // Just update the mission in done column
       const filename = path.basename(filePath)
-      if (filePath.includes('/active/')) {
-        try {
-          const content = await fs.readFile(filePath, 'utf-8')
-          const mission = parseMissionFile(content, filename)
-          broadcast({
-            type: 'mission:update',
-            payload: mission
-          })
-        } catch (err) {
-          if (err.code !== 'ENOENT') {
-            console.error(`Error reading mission ${filename}:`, err.message)
-          }
-        }
-      } else if (filePath.includes('/completed/')) {
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        const mission = parseMissionFile(content, filename)
+        mission.status = 'done' // Force done status
         broadcast({
-          type: 'mission:complete',
-          payload: { id: filename }
+          type: 'mission:update',
+          payload: mission
         })
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error(`Error reading completed mission ${filename}:`, err.message)
+        }
       }
     } else if (filePath.endsWith('state.json')) {
       // Dashboard state update - refresh all agents
@@ -185,10 +356,32 @@ watcher.on('add', (filePath) => {
       try {
         const content = await fs.readFile(filePath, 'utf-8')
         const mission = parseMissionFile(content, filename)
+        
+        // Add to cache
+        missionCache.set(filename, mission)
+        
+        // Add creation to feed
+        const feedItem = addToFeed({
+          agent: mission.assigned_to || 'SYSTEM',
+          action: 'created',
+          target: mission.title,
+          targetType: 'mission'
+        })
+        
         broadcast({
           type: 'mission:new',
           payload: mission
         })
+        
+        broadcast({
+          type: 'feed:activity',
+          payload: {
+            ...feedItem,
+            time: 'just now',
+            _new: true
+          }
+        })
+        
       } catch (err) {
         if (err.code !== 'ENOENT') {
           console.error(`Error reading new mission ${filename}:`, err.message)
@@ -201,9 +394,17 @@ watcher.on('add', (filePath) => {
 watcher.on('unlink', (filePath) => {
   if (filePath.includes('/mission-control/active/')) {
     const filename = path.basename(filePath)
+    
+    // Get from cache before removing
+    const mission = missionCache.get(filename)
+    missionCache.delete(filename)
+    
     broadcast({
       type: 'mission:removed',
-      payload: { id: filename }
+      payload: { 
+        id: mission?.id || filename,
+        filename 
+      }
     })
   }
 })
@@ -221,7 +422,7 @@ setInterval(async () => {
   // Count queued missions
   let queuedMissions = 0
   try {
-    const files = await fs.readdir(path.join(MISSION_CONTROL_PATH, 'active'))
+    const files = await fs.readdir(ACTIVE_PATH)
     queuedMissions = files.filter(f => f.endsWith('.md')).length
   } catch (err) {
     if (err.code !== 'ENOENT') {
@@ -241,7 +442,7 @@ setInterval(async () => {
 }, 10000)
 
 // ============================================
-// REST API Endpoints (existing)
+// REST API Endpoints
 // ============================================
 
 // Helper: Get agent info from AGENT_META (canonical source)
@@ -370,19 +571,22 @@ app.get('/api/missions', async (req, res) => {
     
     // Read active missions
     try {
-      const activePath = path.join(MISSION_CONTROL_PATH, 'active')
-      const activeFiles = await fs.readdir(activePath)
+      const activeFiles = await fs.readdir(ACTIVE_PATH)
       
       for (const file of activeFiles) {
         if (file.endsWith('.md')) {
-          const content = await fs.readFile(path.join(activePath, file), 'utf-8')
+          const content = await fs.readFile(path.join(ACTIVE_PATH, file), 'utf-8')
           const mission = parseMissionFile(content, file)
           
+          // Update cache
+          missionCache.set(file, mission)
+          
           // Categorize by status
-          if (mission.status === 'progress') missions.progress.push(mission)
-          else if (mission.status === 'review') missions.review.push(mission)
-          else if (mission.status === 'blocked') missions.queue.push(mission) // Show blocked in queue for now
-          else missions.queue.push(mission)
+          const col = mission.status === 'progress' ? 'progress' 
+                    : mission.status === 'review' ? 'review'
+                    : mission.status === 'done' ? 'done'
+                    : 'queue'
+          missions[col].push(mission)
         }
       }
     } catch (err) {
@@ -391,21 +595,30 @@ app.get('/api/missions', async (req, res) => {
       }
     }
     
-    // Read completed missions
+    // Read completed missions (last 10)
     try {
-      const completedPath = path.join(MISSION_CONTROL_PATH, 'completed')
-      const completedFiles = await fs.readdir(completedPath)
+      const completedFiles = await fs.readdir(COMPLETED_PATH)
       
-      for (const file of completedFiles.slice(-10)) { // Last 10 completed
+      for (const file of completedFiles.slice(-10)) {
         if (file.endsWith('.md')) {
-          const content = await fs.readFile(path.join(completedPath, file), 'utf-8')
-          missions.done.push(parseMissionFile(content, file))
+          const content = await fs.readFile(path.join(COMPLETED_PATH, file), 'utf-8')
+          const mission = parseMissionFile(content, file)
+          mission.status = 'done' // Force done status
+          missions.done.push(mission)
         }
       }
     } catch (err) {
       if (err.code !== 'ENOENT') {
         console.error('Error reading completed missions:', err.message)
       }
+    }
+    
+    // Sort by priority within each column
+    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+    for (const col of Object.keys(missions)) {
+      missions[col].sort((a, b) => 
+        (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2)
+      )
     }
     
     res.json(missions)
@@ -415,55 +628,19 @@ app.get('/api/missions', async (req, res) => {
   }
 })
 
-function parseMissionFile(content, filename) {
-  const titleMatch = content.match(/^#\s*(.+)/m)
-  const title = titleMatch ? titleMatch[1].replace(/^(FORGE|Task|Mission):\s*/i, '').trim() : filename.replace('.md', '')
-  
-  // Get full status line (handle markdown **bold**)
-  const statusLineMatch = content.match(/\*?\*?Status:\*?\*?\s*(.+)/i)
-  const statusLine = statusLineMatch ? statusLineMatch[1].replace(/^\*+\s*/, '') : ''
-  
-  // Determine status category based on content
-  let status = 'queue'
-  if (statusLine.includes('✅') || statusLine.toLowerCase().includes('complete')) {
-    status = 'review' // Completed but in active/ = needs review
-  } else if (statusLine.toLowerCase().includes('progress') || 
-             statusLine.toLowerCase().includes('working') ||
-             content.toLowerCase().includes('in progress')) {
-    status = 'progress'
-  } else if (statusLine.toLowerCase().includes('blocked') ||
-             statusLine.toLowerCase().includes('waiting')) {
-    status = 'blocked'
-  }
-  
-  const priorityMatch = content.match(/Priority:\s*(\w+)/i)
-  const priority = priorityMatch ? priorityMatch[1].toLowerCase() : 'medium'
-  
-  // Look for assigned agent
-  const agentMatch = content.match(/(?:Assigned to|Assignee|Agent):\s*(\w+)/i) ||
-                     filename.match(/^(\w+)-/i)
-  const agent = agentMatch ? agentMatch[1].toUpperCase() : null
-  
-  // Get description from objective or first paragraph
-  const objectiveMatch = content.match(/## Objective\s*\n+(.+)/i)
-  const descMatch = objectiveMatch || content.match(/\n\n([^#\n].{10,100})/m)
-  const description = descMatch ? descMatch[1].trim().slice(0, 80) : ''
-  
-  return {
-    id: filename,
-    title: title.slice(0, 50),
-    description,
-    status,
-    priority,
-    agent,
-    tags: priorityMatch && priority === 'critical' ? ['urgent'] : [],
-    created: 'recently'
-  }
-}
-
 // GET /api/feed - Get recent activity
 app.get('/api/feed', async (req, res) => {
   try {
+    // Return cached feed if available
+    if (activityFeed.length > 0) {
+      const feed = activityFeed.map(item => ({
+        ...item,
+        time: formatRelativeTime(new Date(item.timestamp))
+      }))
+      return res.json({ feed })
+    }
+    
+    // Otherwise build initial feed from WORKING.md files
     const feed = []
     const knownAgents = Object.keys(AGENT_META)
     
@@ -478,25 +655,6 @@ app.get('/api/feed', async (req, res) => {
         
         // Only include recently active agents
         if (ageMinutes < 60) {
-          // Extract recent entries from WORKING.md
-          const lines = content.split('\n')
-          
-          // Look for "This Session Summary" or recent bullet points
-          let inSummary = false
-          for (const line of lines) {
-            if (line.includes('This Session') || line.includes('Summary')) inSummary = true
-            if (inSummary && line.trim().startsWith('-')) {
-              feed.push({
-                id: `${agentDir}-${Date.now()}-${Math.random()}`,
-                agent: agentDir.toUpperCase(),
-                action: 'completed',
-                target: line.replace(/^[-*]\s*/, '').slice(0, 60),
-                time: ageMinutes < 5 ? 'just now' : `${Math.round(ageMinutes)}m ago`,
-                type: 'task'
-              })
-            }
-          }
-          
           // Add status update based on current task
           const taskMatch = content.match(/(?:Current(?:\s+Task)?|Status):\s*(.+)/i)
           if (taskMatch) {
@@ -505,8 +663,9 @@ app.get('/api/feed', async (req, res) => {
               agent: agentDir.toUpperCase(),
               action: 'is working on',
               target: taskMatch[1].trim().slice(0, 50),
-              time: ageMinutes < 5 ? 'just now' : `${Math.round(ageMinutes)}m ago`,
-              type: 'status'
+              time: formatRelativeTime(mtime),
+              type: 'status',
+              timestamp: mtime.toISOString()
             })
           }
         }
@@ -518,12 +677,8 @@ app.get('/api/feed', async (req, res) => {
       }
     }
     
-    // Sort by recency (just now first)
-    feed.sort((a, b) => {
-      const aTime = a.time === 'just now' ? 0 : parseInt(a.time) || 999
-      const bTime = b.time === 'just now' ? 0 : parseInt(b.time) || 999
-      return aTime - bTime
-    })
+    // Sort by recency
+    feed.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     
     res.json({ feed: feed.slice(0, 30) })
   } catch (err) {
@@ -531,6 +686,21 @@ app.get('/api/feed', async (req, res) => {
     res.json({ feed: [] })
   }
 })
+
+// Format timestamp as relative time
+function formatRelativeTime(date) {
+  const now = Date.now()
+  const then = date instanceof Date ? date.getTime() : new Date(date).getTime()
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60000)
+  
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHours = Math.floor(diffMin / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -540,6 +710,10 @@ app.get('/api/health', (req, res) => {
     websocket: {
       port: WS_PORT,
       clients: clients.size
+    },
+    cache: {
+      missions: missionCache.size,
+      feedItems: activityFeed.length
     }
   })
 })
@@ -555,8 +729,10 @@ app.get('/{*path}', (req, res) => {
 })
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Mission Control running on http://0.0.0.0:${PORT}`)
+  console.log(`Mission Control v4 running on http://0.0.0.0:${PORT}`)
   console.log(`WebSocket server running on ws://0.0.0.0:${WS_PORT}`)
   console.log(`Reading from: ${CLAWD_PATH}`)
   console.log(`Watching: ${watchPaths.join(', ')}`)
+  console.log(`Active missions: ${ACTIVE_PATH}`)
+  console.log(`Completed missions: ${COMPLETED_PATH}`)
 })
