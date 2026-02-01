@@ -1,28 +1,29 @@
 import AgentCard from './AgentCard'
 
-// Fallback agents for when API isn't ready
+// Fallback agents for when API isn't ready (our actual squad)
 const fallbackAgents = [
-  { name: 'JARVIS', emoji: '🎯', role: 'Chief of Staff', status: 'working', type: 'EXEC' },
-  { name: 'FORGE', emoji: '🔨', role: 'Builder', status: 'working', type: 'SPC' },
-  { name: 'SCHOLAR', emoji: '📚', role: 'Researcher', status: 'standby', type: 'SPC' },
-  { name: 'SCRIBE', emoji: '✍️', role: 'Writer', status: 'standby', type: 'SPC' },
-  { name: 'SENTINEL', emoji: '🛡️', role: 'Monitor', status: 'working', type: 'SPC' },
-  { name: 'ORACLE', emoji: '🔮', role: 'Analyst', status: 'standby', type: 'SPC' },
-  { name: 'HERALD', emoji: '📢', role: 'Comms', status: 'standby', type: 'SPC' },
-  { name: 'MAVEN', emoji: '📊', role: 'Marketing', status: 'standby', type: 'SPC' },
-  { name: 'NEXUS', emoji: '🔗', role: 'Integrator', status: 'offline', type: 'SPC' },
-  { name: 'CIPHER', emoji: '🔐', role: 'Security', status: 'offline', type: 'SPC' },
-  { name: 'SAGE', emoji: '🧘', role: 'Advisor', status: 'standby', type: 'SPC' },
-  { name: 'PIXEL', emoji: '🎨', role: 'Designer', status: 'working', type: 'SPC' },
-  { name: 'ECHO', emoji: '🔊', role: 'Voice', status: 'offline', type: 'SPC' },
-  { name: 'ATLAS', emoji: '🗺️', role: 'Navigator', status: 'offline', type: 'SPC' },
-  { name: 'TEMPO', emoji: '⏱️', role: 'Scheduler', status: 'standby', type: 'SPC' },
+  { name: 'JARVIS', emoji: '🎯', role: 'Chief Orchestrator', status: 'working', type: 'EXEC' },
+  { name: 'HUNTER', emoji: '🎯', role: 'Sales & Relationships', status: 'working', type: 'SPC' },
+  { name: 'INBOX', emoji: '📧', role: 'Email Intelligence', status: 'working', type: 'SPC' },
+  { name: 'MONEY', emoji: '💰', role: 'Revenue Intelligence', status: 'working', type: 'SPC' },
+  { name: 'LINKEDIN', emoji: '💼', role: 'LinkedIn Growth', status: 'working', type: 'SPC' },
+  { name: 'XPERT', emoji: '🐦', role: 'X/Twitter', status: 'blocked', type: 'SPC' },
+  { name: 'DISPATCH', emoji: '📰', role: 'Newsletter', status: 'working', type: 'SPC' },
+  { name: 'SCOUT', emoji: '🔍', role: 'Research & Intel', status: 'working', type: 'SPC' },
+  { name: 'FORGE', emoji: '🔨', role: 'Builder/Developer', status: 'working', type: 'SPC' },
+  { name: 'ORACLE', emoji: '🔮', role: 'Trading Intelligence', status: 'working', type: 'SPC' },
+  { name: 'VIBE', emoji: '🎨', role: 'Marketing Systems', status: 'standby', type: 'SPC' },
+  { name: 'SENTINEL', emoji: '🛡️', role: 'Security & Ops', status: 'working', type: 'SPC' },
+  { name: 'NEXUS', emoji: '🔗', role: 'System Intelligence', status: 'standby', type: 'SPC' },
+  { name: 'CLAW', emoji: '🦀', role: 'OpenClaw Specialist', status: 'working', type: 'SPC' },
+  { name: 'CRITIC', emoji: '🎭', role: 'Quality Control', status: 'standby', type: 'SPC' },
 ]
 
 export default function AgentPanel({ agents, loading }) {
   const displayAgents = agents.length > 0 ? agents : fallbackAgents
   
   const activeCount = displayAgents.filter(a => a.status === 'working').length
+  const blockedCount = displayAgents.filter(a => a.status === 'blocked').length
   const standbyCount = displayAgents.filter(a => a.status === 'standby').length
 
   return (
@@ -39,11 +40,17 @@ export default function AgentPanel({ agents, loading }) {
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 bg-green-400 rounded-full"></span>
             {activeCount} active
           </span>
+          {blockedCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+              {blockedCount} blocked
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
             {standbyCount} standby

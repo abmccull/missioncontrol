@@ -1,12 +1,14 @@
 const statusColors = {
   working: 'bg-green-400',
   standby: 'bg-yellow-400',
+  blocked: 'bg-red-400',
   offline: 'bg-gray-500',
 }
 
 const statusLabels = {
   working: 'WORKING',
   standby: 'STANDBY',
+  blocked: 'BLOCKED',
   offline: 'OFFLINE',
 }
 
@@ -17,12 +19,14 @@ const typeColors = {
 }
 
 export default function AgentCard({ agent }) {
-  const { name, emoji, role, status, type = 'SPC', lastSeen } = agent
+  const { name, emoji, role, status, type = 'SPC', lastSeen, currentTask } = agent
 
   return (
     <div className={`
       p-3 rounded-lg cursor-pointer transition-all
-      ${status === 'working' ? 'bg-[#242b3d] border-l-2 border-green-400' : 'hover:bg-[#242b3d]/50'}
+      ${status === 'working' ? 'bg-[#242b3d] border-l-2 border-green-400' : ''}
+      ${status === 'blocked' ? 'bg-[#2d242b] border-l-2 border-red-400' : ''}
+      ${status !== 'working' && status !== 'blocked' ? 'hover:bg-[#242b3d]/50' : ''}
     `}>
       <div className="flex items-start gap-3">
         <div className="text-lg">{emoji || '🤖'}</div>
@@ -35,6 +39,11 @@ export default function AgentCard({ agent }) {
             </span>
           </div>
           <div className="text-xs text-gray-400 truncate">{role}</div>
+          {currentTask && (
+            <div className="text-[10px] text-gray-500 truncate mt-1 max-w-[140px]" title={currentTask}>
+              {currentTask.length > 35 ? currentTask.slice(0, 35) + '...' : currentTask}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col items-end gap-1">
@@ -42,6 +51,7 @@ export default function AgentCard({ agent }) {
             <span className={`w-2 h-2 rounded-full ${statusColors[status] || statusColors.offline} ${status === 'working' ? 'animate-pulse' : ''}`}></span>
             <span className={`text-[10px] font-medium ${
               status === 'working' ? 'text-green-400' : 
+              status === 'blocked' ? 'text-red-400' :
               status === 'standby' ? 'text-yellow-400' : 'text-gray-500'
             }`}>
               {statusLabels[status] || 'OFFLINE'}
