@@ -1,3 +1,4 @@
+/* eslint-env node */
 import express from 'express'
 import cors from 'cors'
 import fs from 'fs/promises'
@@ -159,7 +160,11 @@ watcher.on('change', async (filePath) => {
             type: 'mission:update',
             payload: mission
           })
-        } catch {}
+        } catch (err) {
+          if (err.code !== 'ENOENT') {
+            console.error(`Error reading mission ${filename}:`, err.message)
+          }
+        }
       } else if (filePath.includes('/completed/')) {
         broadcast({
           type: 'mission:complete',
@@ -184,7 +189,11 @@ watcher.on('add', (filePath) => {
           type: 'mission:new',
           payload: mission
         })
-      } catch {}
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error(`Error reading new mission ${filename}:`, err.message)
+        }
+      }
     })
   }
 })
@@ -214,7 +223,11 @@ setInterval(async () => {
   try {
     const files = await fs.readdir(path.join(MISSION_CONTROL_PATH, 'active'))
     queuedMissions = files.filter(f => f.endsWith('.md')).length
-  } catch {}
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('Error counting missions:', err.message)
+    }
+  }
   
   broadcast({
     type: 'stats:update',
@@ -266,7 +279,12 @@ async function getAgentStatus(agentDir) {
         if (agentState.status === 'idle') return 'standby'
         // Use file mtime as fallback
       }
-    } catch {}
+    } catch (err) {
+      // state.json is optional, ignore ENOENT
+      if (err.code !== 'ENOENT') {
+        console.error(`Error reading state.json for ${agentDir}:`, err.message)
+      }
+    }
     
     // If WORKING.md was modified in last 5 minutes = working
     // If modified in last 30 minutes = standby  
@@ -274,7 +292,11 @@ async function getAgentStatus(agentDir) {
     if (ageMinutes < 5) return 'working'
     if (ageMinutes < 30) return 'standby'
     return 'offline'
-  } catch {
+  } catch (err) {
+    // Missing WORKING.md means agent is offline
+    if (err.code !== 'ENOENT') {
+      console.error(`Error checking status for ${agentDir}:`, err.message)
+    }
     return 'offline'
   }
 }
@@ -290,17 +312,27 @@ async function getAgentTask(agentDir) {
     if (agentState?.currentTask) {
       return agentState.currentTask
     }
-  } catch {}
+  } catch (err) {
+    // state.json is optional
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading state.json for task:`, err.message)
+    }
+  }
   
   try {
     // Fallback to WORKING.md first line
     const workingPath = path.join(MEMORY_PATH, agentDir, 'WORKING.md')
     const content = await fs.readFile(workingPath, 'utf-8')
-    const firstTask = content.match(/(?:Current|Status):\s*(.+)/i)
+    // Match "Current:", "Current Task:", or "Status:"
+    const firstTask = content.match(/(?:Current(?:\s+Task)?|Status):\s*(.+)/i)
     return firstTask ? firstTask[1].trim().slice(0, 60) : null
-  } catch {}
-  
-  return null
+  } catch (err) {
+    // Ignore missing files, log other errors
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading task for ${agentDir}:`, err.message)
+    }
+    return null
+  }
 }
 
 // GET /api/agents - List all agents with status
@@ -353,7 +385,11 @@ app.get('/api/missions', async (req, res) => {
           else missions.queue.push(mission)
         }
       }
-    } catch {}
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading active missions:', err.message)
+      }
+    }
     
     // Read completed missions
     try {
@@ -366,7 +402,11 @@ app.get('/api/missions', async (req, res) => {
           missions.done.push(parseMissionFile(content, file))
         }
       }
-    } catch {}
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading completed missions:', err.message)
+      }
+    }
     
     res.json(missions)
   } catch (err) {
@@ -458,7 +498,7 @@ app.get('/api/feed', async (req, res) => {
           }
           
           // Add status update based on current task
-          const taskMatch = content.match(/(?:Current Task|Status):\s*(.+)/i)
+          const taskMatch = content.match(/(?:Current(?:\s+Task)?|Status):\s*(.+)/i)
           if (taskMatch) {
             feed.push({
               id: `${agentDir}-status-${Date.now()}`,
@@ -470,7 +510,12 @@ app.get('/api/feed', async (req, res) => {
             })
           }
         }
-      } catch {}
+      } catch (err) {
+        // Missing WORKING.md is expected for some agents
+        if (err.code !== 'ENOENT') {
+          console.error(`Error reading feed for ${agentDir}:`, err.message)
+        }
+      }
     }
     
     // Sort by recency (just now first)
