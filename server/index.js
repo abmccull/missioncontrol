@@ -126,17 +126,19 @@ function broadcast(event) {
   }
 }
 
-// File watcher setup
+// File watcher setup - watch directories for better reliability
 const watchPaths = [
-  path.join(MEMORY_PATH, '*', 'WORKING.md'),
-  path.join(ACTIVE_PATH, '*.md'),
-  path.join(COMPLETED_PATH, '*.md'),
-  path.join(CLAWD_PATH, 'dashboard', 'state.json'),
+  MEMORY_PATH,  // Watch entire memory dir for WORKING.md files
+  ACTIVE_PATH,  // Watch active missions dir
+  COMPLETED_PATH,  // Watch completed missions dir
+  path.join(CLAWD_PATH, 'dashboard'),  // Watch dashboard dir
 ]
 
 const watcher = watch(watchPaths, {
   persistent: true,
   ignoreInitial: true,
+  depth: 2,  // Go 2 levels deep for memory/*/WORKING.md
+  ignored: /^\.|node_modules/,  // Ignore dotfiles and node_modules
   awaitWriteFinish: {
     stabilityThreshold: 300,
     pollInterval: 100
@@ -282,9 +284,13 @@ async function autoArchiveMission(filePath, mission) {
   }
 }
 
+watcher.on('ready', () => {
+  console.log('File watcher ready - watching for changes...')
+})
+
 watcher.on('change', async (filePath) => {
   debounce(filePath, async () => {
-    console.log(`File changed: ${filePath}`)
+    console.log(`[CHANGE] File changed: ${filePath}`)
     
     // Determine what type of change this is
     if (filePath.includes('/memory/') && filePath.endsWith('WORKING.md')) {
