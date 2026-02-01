@@ -38,7 +38,7 @@ export default function TaskCard({ task, column }) {
   const agentColor = agentColors[agent] || '#6b7280'
 
   return (
-    <div className="bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group border border-transparent hover:border-gray-600">
+    <div className="task-card bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group border border-transparent hover:border-gray-600 touch-target">
       {/* Priority Badge */}
       {priority && priority !== 'medium' && (
         <div className="mb-2">
@@ -49,13 +49,13 @@ export default function TaskCard({ task, column }) {
       )}
       
       {/* Title */}
-      <h3 className="text-sm font-medium text-white mb-1 group-hover:text-blue-400 transition-colors line-clamp-2">
+      <h3 className="task-card-title text-sm font-medium text-white mb-1 group-hover:text-blue-400 transition-colors line-clamp-2">
         {title}
       </h3>
       
       {/* Description */}
       {description && (
-        <p className="text-xs text-gray-400 mb-3 line-clamp-2">{description}</p>
+        <p className="task-card-description text-xs text-gray-400 mb-3 line-clamp-2">{description}</p>
       )}
 
       {/* Agent + Time Row */}

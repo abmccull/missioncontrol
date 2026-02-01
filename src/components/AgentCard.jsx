@@ -46,7 +46,7 @@ const agentColors = {
   CRITIC: '#84cc16', // lime
 }
 
-export default function AgentCard({ agent }) {
+export default function AgentCard({ agent, compact = false }) {
   const { name, emoji, role, status, type = 'SPC', lastSeen, currentTask, _updated } = agent
   const [isAnimating, setIsAnimating] = useState(false)
 
@@ -62,6 +62,39 @@ export default function AgentCard({ agent }) {
   const initial = name?.[0] || '?'
   const bgColor = agentColors[name] || '#6b7280'
 
+  if (compact) {
+    // Compact mobile view
+    return (
+      <div className={`
+        agent-card p-2.5 rounded-lg cursor-pointer transition-all touch-target
+        ${status === 'working' ? 'bg-[#242b3d] border-l-2 border-green-400' : 'hover:bg-[#242b3d]/50'}
+      `}>
+        <div className="flex items-center gap-2">
+          <div 
+            className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
+            style={{ backgroundColor: bgColor }}
+          >
+            {initial}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="agent-card-name font-medium text-white text-xs">{name}</span>
+              <span className={`text-[9px] px-1 py-0.5 rounded border ${typeColors[type] || typeColors.SPC}`}>
+                {type}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className={`w-2 h-2 rounded-full ${statusColors[status] || statusColors.offline} ${status === 'working' ? 'animate-pulse' : ''}`}></span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Standard view
   return (
     <div className={`
       p-3 rounded-lg cursor-pointer transition-all duration-300
@@ -85,7 +118,7 @@ export default function AgentCard({ agent }) {
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-white text-sm">{name}</span>
+            <span className="agent-card-name font-medium text-white text-sm">{name}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${typeColors[type] || typeColors.SPC}`}>
               {type}
             </span>

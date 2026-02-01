@@ -28,7 +28,7 @@ const fallbackFeed = [
 
 const tabs = ['All', 'Tasks', 'Comments', 'Docs', 'Status']
 
-export default function LiveFeed({ feed, loading, isConnected }) {
+export default function LiveFeed({ feed, loading, isMobile = false, isConnected }) {
   const [activeTab, setActiveTab] = useState('All')
   const displayFeed = feed.length > 0 ? feed : fallbackFeed
 
@@ -42,8 +42,51 @@ export default function LiveFeed({ feed, loading, isConnected }) {
         (activeTab === 'Status' && item.type === 'status')
       )
 
+  // Mobile full-screen view
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full bg-[#0f1419]">
+        <div className="p-4 border-b border-gray-700 bg-[#1a1f2e]">
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
+            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Live Feed</h2>
+          </div>
+          
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {tabs.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-2 text-xs rounded transition-colors whitespace-nowrap touch-target ${
+                  activeTab === tab 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:text-white hover:bg-[#242b3d]'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {loading ? (
+            <div className="text-center text-gray-500 text-sm py-8">Loading...</div>
+          ) : filteredFeed.length === 0 ? (
+            <div className="text-center text-gray-600 text-xs py-8">No activity</div>
+          ) : (
+            filteredFeed.map((item, idx) => (
+              <FeedItem key={item.id || idx} item={item} />
+            ))
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop sidebar view
   return (
-    <aside className="w-72 bg-[#1a1f2e] border-l border-gray-700/50 flex flex-col">
+    <aside className="w-72 bg-[#1a1f2e] border-l border-gray-700/50 flex flex-col desktop-sidebar">
       {/* Header */}
       <div className="p-3 border-b border-gray-700/50">
         <div className="flex items-center justify-between mb-2">
@@ -107,7 +150,7 @@ function FeedItem({ item }) {
   
   return (
     <div className={`
-      flex items-start gap-2 p-2 rounded-lg transition-all duration-300
+      feed-item flex items-start gap-2 p-2 rounded-lg transition-all duration-300 touch-target
       hover:bg-[#242b3d]/50
       ${isNew ? 'bg-green-400/10' : ''}
     `}
@@ -128,7 +171,7 @@ function FeedItem({ item }) {
       </div>
       
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] text-gray-300 leading-relaxed">
+        <p className="feed-item-text text-[11px] text-gray-300 leading-relaxed">
           <span className={`font-medium ${textColor}`}>{agent}</span>
           {' '}{action}
           {target && (

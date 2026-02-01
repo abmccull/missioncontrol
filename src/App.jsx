@@ -3,6 +3,7 @@ import Header from './components/Header'
 import AgentPanel from './components/AgentPanel'
 import MissionQueue from './components/MissionQueue'
 import LiveFeed from './components/LiveFeed'
+import MobileNav from './components/MobileNav'
 import useWebSocket from './hooks/useWebSocket'
 
 function App() {
@@ -11,6 +12,10 @@ function App() {
   const [feed, setFeed] = useState([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ activeAgents: 0, queuedMissions: 0 })
+  
+  // Mobile state
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeView, setActiveView] = useState('missions') // 'agents' | 'missions' | 'feed'
   
   const { isConnected, lastMessage, connectionStatus } = useWebSocket()
 
@@ -31,6 +36,32 @@ function App() {
       setLoading(false)
     }
   }, [])
+
+  // Close sidebar when clicking overlay
+  const handleOverlayClick = () => {
+    setSidebarOpen(false)
+  }
+
+  // Close sidebar on escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [])
+
+  // Prevent body scroll when sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [sidebarOpen])
 
   useEffect(() => {
     fetchData()
@@ -120,9 +151,18 @@ function App() {
         queuedMissions={stats.queuedMissions || queuedCount}
         isConnected={isConnected}
         connectionStatus={connectionStatus}
+        onMenuClick={() => setSidebarOpen(true)}
       />
       
-      <div className="flex flex-1 overflow-hidden">
+      {/* Mobile sidebar overlay */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+        onClick={handleOverlayClick}
+        aria-hidden="true"
+      />
+      
+      {/* Desktop layout */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
         {/* Left Sidebar - Agents */}
         <AgentPanel agents={agents} loading={loading} />
         
@@ -132,6 +172,35 @@ function App() {
         {/* Right Sidebar - Live Feed */}
         <LiveFeed feed={feed} loading={loading} isConnected={isConnected} />
       </div>
+
+      {/* Mobile layout */}
+      <div className="flex md:hidden flex-1 overflow-hidden">
+        {/* Mobile sidebar */}
+        <div className={`mobile-sidebar ${sidebarOpen ? 'open' : ''}`}>
+          <AgentPanel 
+            agents={agents} 
+            loading={loading} 
+            isMobile={true}
+            onClose={() => setSidebarOpen(false)}
+          />
+        </div>
+
+        {/* Mobile content area - switches based on activeView */}
+        <div className="flex-1 overflow-auto main-content">
+          {activeView === 'agents' && (
+            <AgentPanel agents={agents} loading={loading} isMobile={true} inline={true} />
+          )}
+          {activeView === 'missions' && (
+            <MissionQueue missions={missions} loading={loading} isMobile={true} />
+          )}
+          {activeView === 'feed' && (
+            <LiveFeed feed={feed} loading={loading} isMobile={true} isConnected={isConnected} />
+          )}
+        </div>
+      </div>
+
+      {/* Mobile bottom navigation */}
+      <MobileNav activeView={activeView} onViewChange={setActiveView} />
     </div>
   )
 }

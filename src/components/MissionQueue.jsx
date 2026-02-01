@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import TaskCard from './TaskCard'
 
 // Fallback missions for demo
@@ -22,7 +23,10 @@ const columns = [
   { key: 'done', label: 'DONE', color: 'bg-green-500', textColor: 'text-green-400' },
 ]
 
-export default function MissionQueue({ missions, loading }) {
+export default function MissionQueue({ missions, loading, isMobile = false }) {
+  const [activeColumn, setActiveColumn] = useState('queue')
+  const [swipeMode, setSwipeMode] = useState(true) // Horizontal swipe mode on mobile
+  
   const displayMissions = Object.keys(missions).some(k => missions[k]?.length > 0) 
     ? missions 
     : fallbackMissions
@@ -31,6 +35,86 @@ export default function MissionQueue({ missions, loading }) {
   const reviewCount = displayMissions.review?.length || 0
   const doneCount = displayMissions.done?.length || 0
 
+  // Mobile view
+  if (isMobile) {
+    return (
+      <main className="flex-1 bg-[#0f1419] flex flex-col overflow-hidden">
+        {/* Column tabs */}
+        <div className="flex border-b border-gray-700 bg-[#1a1f2e] overflow-x-auto">
+          {columns.map(col => {
+            const count = displayMissions[col.key]?.length || 0
+            return (
+              <button
+                key={col.key}
+                onClick={() => setActiveColumn(col.key)}
+                className={`flex-1 min-w-[80px] px-3 py-3 text-xs font-medium transition-colors touch-target
+                  ${activeColumn === col.key 
+                    ? 'text-white border-b-2 border-blue-500 bg-[#242b3d]/50' 
+                    : 'text-gray-400 hover:text-white'
+                  }`}
+              >
+                <span className="flex items-center justify-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${col.color}`}></span>
+                  {col.label}
+                  <span className="text-[10px] bg-[#242b3d] px-1.5 py-0.5 rounded-full">{count}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Swipeable columns view */}
+        {swipeMode ? (
+          <div className="flex-1 overflow-hidden">
+            <div 
+              className="swipe-container h-full flex"
+              style={{ scrollSnapType: 'x mandatory' }}
+            >
+              {columns.map(col => {
+                const tasks = displayMissions[col.key] || []
+                return (
+                  <div 
+                    key={col.key} 
+                    className="swipe-item flex-shrink-0 w-full h-full overflow-y-auto p-3"
+                    style={{ scrollSnapAlign: 'start' }}
+                  >
+                    <div className="space-y-3">
+                      {loading ? (
+                        <div className="text-center text-gray-500 text-sm py-8">Loading...</div>
+                      ) : tasks.length === 0 ? (
+                        <div className="text-center text-gray-600 text-xs py-8">No tasks</div>
+                      ) : (
+                        tasks.map((task, idx) => (
+                          <TaskCard key={task.id || idx} task={task} column={col.key} />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Single column view */
+          <div className="flex-1 overflow-y-auto p-3">
+            <div className="space-y-3">
+              {loading ? (
+                <div className="text-center text-gray-500 text-sm py-8">Loading...</div>
+              ) : (displayMissions[activeColumn] || []).length === 0 ? (
+                <div className="text-center text-gray-600 text-xs py-8">No tasks</div>
+              ) : (
+                (displayMissions[activeColumn] || []).map((task, idx) => (
+                  <TaskCard key={task.id || idx} task={task} column={activeColumn} />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    )
+  }
+
+  // Desktop view
   return (
     <main className="flex-1 bg-[#0f1419] p-4 overflow-hidden flex flex-col">
       {/* Header Row */}
@@ -55,7 +139,7 @@ export default function MissionQueue({ missions, loading }) {
       </div>
 
       {/* Columns Grid */}
-      <div className="grid grid-cols-4 gap-3 flex-1 min-h-0">
+      <div className="mission-grid grid grid-cols-4 gap-3 flex-1 min-h-0">
         {columns.map(col => {
           const tasks = displayMissions[col.key] || []
           return (
