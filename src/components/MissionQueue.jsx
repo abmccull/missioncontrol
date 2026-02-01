@@ -25,7 +25,7 @@ const columns = [
 
 export default function MissionQueue({ missions, loading, isMobile = false }) {
   const [activeColumn, setActiveColumn] = useState('queue')
-  const [swipeMode, setSwipeMode] = useState(true) // Horizontal swipe mode on mobile
+  const [swipeMode, _setSwipeMode] = useState(true) // Horizontal swipe mode on mobile
   
   const displayMissions = Object.keys(missions).some(k => missions[k]?.length > 0) 
     ? missions 
