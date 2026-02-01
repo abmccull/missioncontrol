@@ -3,8 +3,14 @@ import cors from 'cors'
 import fs from 'fs/promises'
 import path from 'path'
 
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
 const app = express()
-const PORT = 3001
+const PORT = process.env.PORT || 8888
 
 // Base paths - adjust to your clawd installation
 const CLAWD_PATH = process.env.CLAWD_PATH || '/home/node/clawd'
@@ -275,7 +281,17 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-app.listen(PORT, () => {
-  console.log(`Mission Control API running on port ${PORT}`)
+// Serve static files from dist/ in production
+const distPath = path.join(__dirname, '..', 'dist')
+app.use(express.static(distPath))
+
+// SPA fallback - serve index.html for all non-API routes
+// Note: Express 5 requires named params, use {*path} instead of *
+app.get('/{*path}', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'))
+})
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Mission Control running on http://0.0.0.0:${PORT}`)
   console.log(`Reading from: ${CLAWD_PATH}`)
 })
