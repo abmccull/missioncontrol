@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react'
 
-export default function Header({ activeCount, totalCount, onMenuClick }) {
+const connectionColors = {
+  connected: 'bg-green-400',
+  connecting: 'bg-yellow-400 animate-pulse',
+  reconnecting: 'bg-yellow-400 animate-pulse',
+  failed: 'bg-red-400',
+}
+
+const connectionLabels = {
+  connected: 'LIVE',
+  connecting: 'CONNECTING',
+  reconnecting: 'RECONNECTING',
+  failed: 'OFFLINE',
+}
+
+const connectionTextColors = {
+  connected: 'text-green-400',
+  connecting: 'text-yellow-400',
+  reconnecting: 'text-yellow-400',
+  failed: 'text-red-400',
+}
+
+export default function Header({ activeCount, totalCount, queuedMissions = 0, isConnected, connectionStatus = 'connecting', onMenuClick }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -62,7 +83,7 @@ export default function Header({ activeCount, totalCount, onMenuClick }) {
             <div className="text-[10px] md:text-xs text-gray-400 uppercase">Agents Active</div>
           </div>
           <div className="text-center">
-            <div className="text-xl md:text-2xl font-bold text-white">{totalCount - activeCount}</div>
+            <div className="text-xl md:text-2xl font-bold text-white">{queuedMissions || (totalCount - activeCount)}</div>
             <div className="text-[10px] md:text-xs text-gray-400 uppercase">Tasks in Queue</div>
           </div>
         </div>
@@ -79,10 +100,10 @@ export default function Header({ activeCount, totalCount, onMenuClick }) {
           <div className="text-xs text-gray-400">{formatDate(time)}</div>
         </div>
 
-        {/* Online status */}
-        <div className="header-status flex items-center gap-1 md:gap-2 text-green-400">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-          <span className="text-xs md:text-sm font-medium hidden sm:inline">ONLINE</span>
+        {/* Connection status */}
+        <div className={`header-status flex items-center gap-1 md:gap-2 ${connectionTextColors[connectionStatus] || connectionTextColors.connecting}`}>
+          <span className={`w-2 h-2 rounded-full ${connectionColors[connectionStatus] || connectionColors.connecting}`}></span>
+          <span className="text-xs md:text-sm font-medium hidden sm:inline">{connectionLabels[connectionStatus] || 'CONNECTING'}</span>
         </div>
       </div>
     </header>
