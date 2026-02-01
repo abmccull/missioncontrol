@@ -1,4 +1,5 @@
 /* eslint-env node */
+/* global process */
 import express from 'express'
 import cors from 'cors'
 import fs from 'fs/promises'
@@ -49,7 +50,7 @@ const AGENT_META = {
 // WebSocket Server & File Watching
 // ============================================
 
-const server = http.createServer(app)
+const _server = http.createServer(app)
 const wss = new WebSocketServer({ port: WS_PORT })
 
 // Store connected clients

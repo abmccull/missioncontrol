@@ -47,15 +47,20 @@ const agentColors = {
 }
 
 export default function AgentCard({ agent, compact = false }) {
-  const { name, emoji, role, status, type = 'SPC', lastSeen, currentTask, _updated } = agent
+  const { name, emoji: _emoji, role, status, type = 'SPC', lastSeen: _lastSeen, currentTask, _updated } = agent
   const [isAnimating, setIsAnimating] = useState(false)
 
   // Trigger animation when agent status changes
   useEffect(() => {
-    if (_updated) {
-      setIsAnimating(true)
-      const timer = setTimeout(() => setIsAnimating(false), 500)
-      return () => clearTimeout(timer)
+    if (!_updated) return
+    
+    // Schedule animation start for next tick to avoid synchronous setState
+    const startTimer = setTimeout(() => setIsAnimating(true), 0)
+    const endTimer = setTimeout(() => setIsAnimating(false), 500)
+    
+    return () => {
+      clearTimeout(startTimer)
+      clearTimeout(endTimer)
     }
   }, [_updated])
 

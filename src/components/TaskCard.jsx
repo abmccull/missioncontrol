@@ -32,7 +32,7 @@ const tagColors = {
   'competitive-analysis': 'bg-orange-500/20 text-orange-400',
 }
 
-export default function TaskCard({ task, column }) {
+export default function TaskCard({ task }) {
   const { title, description, priority = 'medium', agent, tags = [], created, comments = 0 } = task
   const agentInitial = agent?.[0] || '?'
   const agentColor = agentColors[agent] || '#6b7280'

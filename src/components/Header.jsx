@@ -21,7 +21,7 @@ const connectionTextColors = {
   failed: 'text-red-400',
 }
 
-export default function Header({ activeCount, totalCount, queuedMissions = 0, isConnected, connectionStatus = 'connecting', onMenuClick }) {
+export default function Header({ activeCount, totalCount, queuedMissions = 0, connectionStatus = 'connecting', onMenuClick }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {

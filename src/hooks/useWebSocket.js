@@ -11,6 +11,7 @@ export function useWebSocket() {
   const wsRef = useRef(null)
   const reconnectAttempts = useRef(0)
   const reconnectTimeout = useRef(null)
+  const connectRef = useRef(null)
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
@@ -36,7 +37,7 @@ export function useWebSocket() {
           const delay = RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts.current)
           reconnectAttempts.current++
           console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current})`)
-          reconnectTimeout.current = setTimeout(connect, delay)
+          reconnectTimeout.current = setTimeout(() => connectRef.current?.(), delay)
         } else {
           setConnectionStatus('failed')
         }
@@ -59,6 +60,11 @@ export function useWebSocket() {
       setConnectionStatus('failed')
     }
   }, [])
+
+  // Keep ref updated with latest connect function
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     connect()

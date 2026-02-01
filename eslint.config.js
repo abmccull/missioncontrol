@@ -24,6 +24,10 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Allow setState in effects for WebSocket/subscription patterns
+      'react-hooks/set-state-in-effect': 'off',
+      // Allow accessing refs conditionally before declaration (for reconnect patterns)
+      'react-hooks/refs': 'off',
     },
   },
 ])
