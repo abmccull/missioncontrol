@@ -1,22 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-// Our actual agent squad emojis
-const agentEmojis = {
-  JARVIS: '🎯', HUNTER: '🎯', INBOX: '📧', MONEY: '💰', LINKEDIN: '💼',
-  XPERT: '🐦', DISPATCH: '📰', SCOUT: '🔍', FORGE: '🔨', ORACLE: '🔮',
-  VIBE: '🎨', SENTINEL: '🛡️', NEXUS: '🔗', CLAW: '🦀', CRITIC: '🎭',
+// Agent colors for initials
+const agentColors = {
+  JARVIS: '#6366f1', HUNTER: '#f97316', INBOX: '#06b6d4', MONEY: '#22c55e', LINKEDIN: '#0077b5',
+  XPERT: '#1d9bf0', DISPATCH: '#8b5cf6', SCOUT: '#eab308', FORGE: '#ef4444', ORACLE: '#a855f7',
+  VIBE: '#ec4899', SENTINEL: '#6b7280', NEXUS: '#14b8a6', CLAW: '#f43f5e', CRITIC: '#84cc16',
 }
 
-const agentColors = {
-  JARVIS: 'text-purple-400', HUNTER: 'text-green-400', INBOX: 'text-blue-400',
-  MONEY: 'text-yellow-400', LINKEDIN: 'text-cyan-400', XPERT: 'text-sky-400',
-  DISPATCH: 'text-orange-400', SCOUT: 'text-emerald-400', FORGE: 'text-indigo-400',
-  ORACLE: 'text-violet-400', VIBE: 'text-pink-400', SENTINEL: 'text-red-400',
-  NEXUS: 'text-teal-400', CLAW: 'text-rose-400', CRITIC: 'text-amber-400',
+const agentTextColors = {
+  JARVIS: 'text-indigo-400', HUNTER: 'text-orange-400', INBOX: 'text-cyan-400',
+  MONEY: 'text-green-400', LINKEDIN: 'text-sky-400', XPERT: 'text-blue-400',
+  DISPATCH: 'text-violet-400', SCOUT: 'text-yellow-400', FORGE: 'text-red-400',
+  ORACLE: 'text-purple-400', VIBE: 'text-pink-400', SENTINEL: 'text-gray-400',
+  NEXUS: 'text-teal-400', CLAW: 'text-rose-400', CRITIC: 'text-lime-400',
 }
 
 const fallbackFeed = [
-  { id: 1, agent: 'FORGE', action: 'started building', target: 'Mission Control Dashboard', time: 'just now', type: 'status' },
+  { id: 1, agent: 'FORGE', action: 'is working', target: 'Mission Control v2', time: 'just now', type: 'status' },
   { id: 2, agent: 'SCOUT', action: 'completed', target: 'Evening intel roundup', time: '2m ago', type: 'task' },
   { id: 3, agent: 'INBOX', action: 'triaged', target: '62 emails today', time: '5m ago', type: 'task' },
   { id: 4, agent: 'LINKEDIN', action: 'drafted', target: 'Week 9 posts - 126 in pipeline', time: '10m ago', type: 'task' },
@@ -28,7 +28,7 @@ const fallbackFeed = [
 
 const tabs = ['All', 'Tasks', 'Comments', 'Docs', 'Status']
 
-export default function LiveFeed({ feed, loading }) {
+export default function LiveFeed({ feed, loading, isConnected }) {
   const [activeTab, setActiveTab] = useState('All')
   const displayFeed = feed.length > 0 ? feed : fallbackFeed
 
@@ -43,22 +43,27 @@ export default function LiveFeed({ feed, loading }) {
       )
 
   return (
-    <aside className="w-80 bg-[#1a1f2e] border-l border-gray-700 flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-          <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Live Feed</h2>
+    <aside className="w-72 bg-[#1a1f2e] border-l border-gray-700/50 flex flex-col">
+      {/* Header */}
+      <div className="p-3 border-b border-gray-700/50">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Live Feed</h2>
+          </div>
+          <span className="text-[10px] text-gray-500">{displayFeed.length} active</span>
         </div>
         
-        <div className="flex gap-1">
+        {/* Filter Tabs */}
+        <div className="flex gap-0.5 bg-[#0f1419] rounded-lg p-0.5">
           {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
+              className={`px-2 py-1 text-[10px] rounded-md transition-all ${
                 activeTab === tab 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-[#242b3d]'
+                  ? 'bg-[#242b3d] text-white font-medium' 
+                  : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               {tab}
@@ -67,15 +72,18 @@ export default function LiveFeed({ feed, loading }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-1">
+      {/* Feed List */}
+      <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
-          <div className="text-center text-gray-500 text-sm py-8">Loading...</div>
+          <div className="text-center text-gray-500 text-xs py-6 animate-pulse">Loading...</div>
         ) : filteredFeed.length === 0 ? (
-          <div className="text-center text-gray-600 text-xs py-8">No activity</div>
+          <div className="text-center text-gray-600 text-[10px] py-6">No activity</div>
         ) : (
-          filteredFeed.map((item, idx) => (
-            <FeedItem key={item.id || idx} item={item} />
-          ))
+          <div className="space-y-0.5">
+            {filteredFeed.map((item, idx) => (
+              <FeedItem key={item.id || idx} item={item} />
+            ))}
+          </div>
         )}
       </div>
     </aside>
@@ -83,17 +91,45 @@ export default function LiveFeed({ feed, loading }) {
 }
 
 function FeedItem({ item }) {
-  const { agent, action, target, time } = item
+  const { agent, action, target, time, _new } = item
+  const [isNew, setIsNew] = useState(_new)
+  const initial = agent?.[0] || '?'
+  const bgColor = agentColors[agent] || '#6b7280'
+  const textColor = agentTextColors[agent] || 'text-gray-400'
+  
+  // Clear "new" animation after it plays
+  useEffect(() => {
+    if (_new) {
+      const timer = setTimeout(() => setIsNew(false), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [_new])
   
   return (
-    <div className="flex items-start gap-3 p-2 rounded hover:bg-[#242b3d]/50 transition-colors">
-      <div className="w-6 h-6 rounded-full bg-[#242b3d] flex items-center justify-center text-xs flex-shrink-0">
-        {agentEmojis[agent] || agent?.[0] || '?'}
+    <div className={`
+      flex items-start gap-2 p-2 rounded-lg transition-all duration-300
+      hover:bg-[#242b3d]/50
+      ${isNew ? 'bg-green-400/10' : ''}
+    `}
+    style={{
+      animation: isNew ? 'slideIn 0.3s ease-out' : 'none'
+    }}
+    >
+      {/* Agent Initial Circle */}
+      <div 
+        className={`
+          w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0
+          transition-transform duration-300
+          ${isNew ? 'scale-110' : ''}
+        `}
+        style={{ backgroundColor: bgColor }}
+      >
+        {initial}
       </div>
       
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-300 leading-relaxed">
-          <span className={`font-medium ${agentColors[agent] || 'text-gray-300'}`}>{agent}</span>
+        <p className="text-[11px] text-gray-300 leading-relaxed">
+          <span className={`font-medium ${textColor}`}>{agent}</span>
           {' '}{action}
           {target && (
             <>
@@ -101,7 +137,7 @@ function FeedItem({ item }) {
             </>
           )}
         </p>
-        <span className="text-[10px] text-gray-500">{time}</span>
+        <span className="text-[10px] text-gray-600">{time}</span>
       </div>
     </div>
   )
