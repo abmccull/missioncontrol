@@ -2,6 +2,9 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'fs/promises'
 import path from 'path'
+import { WebSocketServer } from 'ws'
+import { watch } from 'chokidar'
+import http from 'http'
 
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
@@ -11,6 +14,7 @@ const __dirname = dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 8888
+const WS_PORT = 3001
 
 // Base paths - adjust to your clawd installation
 const CLAWD_PATH = process.env.CLAWD_PATH || '/home/node/clawd'
@@ -23,22 +27,209 @@ app.use(express.json())
 
 // Known agent emojis and roles (from SQUAD.md)
 const AGENT_META = {
-  jarvis: { emoji: '🎯', role: 'Chief Orchestrator' },
-  hunter: { emoji: '🎯', role: 'Sales & Relationships' },
-  inbox: { emoji: '📧', role: 'Email Intelligence' },
-  money: { emoji: '💰', role: 'Revenue Intelligence' },
-  linkedin: { emoji: '💼', role: 'LinkedIn Growth' },
-  xpert: { emoji: '🐦', role: 'X/Twitter' },
-  dispatch: { emoji: '📰', role: 'Newsletter' },
-  scout: { emoji: '🔍', role: 'Research & Intel' },
-  forge: { emoji: '🔨', role: 'Builder/Developer' },
-  oracle: { emoji: '🔮', role: 'Trading Intelligence' },
-  vibe: { emoji: '🎨', role: 'Marketing Systems' },
-  sentinel: { emoji: '🛡️', role: 'Security & Ops' },
-  nexus: { emoji: '🔗', role: 'System Intelligence' },
-  claw: { emoji: '🦀', role: 'OpenClaw Specialist' },
-  critic: { emoji: '🎭', role: 'Quality Control' },
+  jarvis: { emoji: '🎯', role: 'Chief Orchestrator', color: '#6366f1' },
+  hunter: { emoji: '🎯', role: 'Sales & Relationships', color: '#f97316' },
+  inbox: { emoji: '📧', role: 'Email Intelligence', color: '#06b6d4' },
+  money: { emoji: '💰', role: 'Revenue Intelligence', color: '#22c55e' },
+  linkedin: { emoji: '💼', role: 'LinkedIn Growth', color: '#0077b5' },
+  xpert: { emoji: '🐦', role: 'X/Twitter', color: '#000000' },
+  dispatch: { emoji: '📰', role: 'Newsletter', color: '#8b5cf6' },
+  scout: { emoji: '🔍', role: 'Research & Intel', color: '#eab308' },
+  forge: { emoji: '🔨', role: 'Builder/Developer', color: '#ef4444' },
+  oracle: { emoji: '🔮', role: 'Trading Intelligence', color: '#a855f7' },
+  vibe: { emoji: '🎨', role: 'Marketing Systems', color: '#ec4899' },
+  sentinel: { emoji: '🛡️', role: 'Security & Ops', color: '#6b7280' },
+  nexus: { emoji: '🔗', role: 'System Intelligence', color: '#14b8a6' },
+  claw: { emoji: '🦀', role: 'OpenClaw Specialist', color: '#f43f5e' },
+  critic: { emoji: '🎭', role: 'Quality Control', color: '#84cc16' },
 }
+
+// ============================================
+// WebSocket Server & File Watching
+// ============================================
+
+const server = http.createServer(app)
+const wss = new WebSocketServer({ port: WS_PORT })
+
+// Store connected clients
+const clients = new Set()
+
+wss.on('connection', (ws) => {
+  console.log('WebSocket client connected')
+  clients.add(ws)
+  
+  // Send initial connection confirmation
+  ws.send(JSON.stringify({ type: 'connected', timestamp: Date.now() }))
+  
+  ws.on('close', () => {
+    clients.delete(ws)
+    console.log('WebSocket client disconnected')
+  })
+  
+  ws.on('error', (err) => {
+    console.error('WebSocket error:', err)
+    clients.delete(ws)
+  })
+})
+
+// Broadcast to all connected clients
+function broadcast(event) {
+  const message = JSON.stringify(event)
+  for (const client of clients) {
+    if (client.readyState === 1) { // OPEN
+      client.send(message)
+    }
+  }
+}
+
+// File watcher setup
+const watchPaths = [
+  path.join(MEMORY_PATH, '*', 'WORKING.md'),
+  path.join(MISSION_CONTROL_PATH, 'active', '*.md'),
+  path.join(MISSION_CONTROL_PATH, 'completed', '*.md'),
+  path.join(CLAWD_PATH, 'dashboard', 'state.json'),
+]
+
+const watcher = watch(watchPaths, {
+  persistent: true,
+  ignoreInitial: true,
+  awaitWriteFinish: {
+    stabilityThreshold: 300,
+    pollInterval: 100
+  }
+})
+
+// Debounce map to prevent rapid-fire events
+const debounceMap = new Map()
+function debounce(key, fn, delay = 500) {
+  if (debounceMap.has(key)) {
+    clearTimeout(debounceMap.get(key))
+  }
+  debounceMap.set(key, setTimeout(() => {
+    fn()
+    debounceMap.delete(key)
+  }, delay))
+}
+
+watcher.on('change', async (filePath) => {
+  debounce(filePath, async () => {
+    console.log(`File changed: ${filePath}`)
+    
+    // Determine what type of change this is
+    if (filePath.includes('/memory/') && filePath.endsWith('WORKING.md')) {
+      // Agent status update
+      const match = filePath.match(/memory\/(\w+)\/WORKING\.md/)
+      if (match) {
+        const agentDir = match[1]
+        const status = await getAgentStatus(agentDir)
+        const task = await getAgentTask(agentDir)
+        
+        broadcast({
+          type: 'agent:status',
+          payload: {
+            id: agentDir,
+            name: agentDir.toUpperCase(),
+            status,
+            currentTask: task,
+            lastSeen: Date.now()
+          }
+        })
+        
+        // Also broadcast to feed
+        broadcast({
+          type: 'feed:activity',
+          payload: {
+            id: `${agentDir}-${Date.now()}`,
+            agent: agentDir.toUpperCase(),
+            action: status === 'working' ? 'is working' : 'updated',
+            target: task || 'status',
+            time: 'just now',
+            type: 'status'
+          }
+        })
+      }
+    } else if (filePath.includes('/mission-control/')) {
+      // Mission update
+      const filename = path.basename(filePath)
+      if (filePath.includes('/active/')) {
+        try {
+          const content = await fs.readFile(filePath, 'utf-8')
+          const mission = parseMissionFile(content, filename)
+          broadcast({
+            type: 'mission:update',
+            payload: mission
+          })
+        } catch {}
+      } else if (filePath.includes('/completed/')) {
+        broadcast({
+          type: 'mission:complete',
+          payload: { id: filename }
+        })
+      }
+    } else if (filePath.endsWith('state.json')) {
+      // Dashboard state update - refresh all agents
+      broadcast({ type: 'agents:refresh' })
+    }
+  })
+})
+
+watcher.on('add', (filePath) => {
+  if (filePath.includes('/mission-control/active/')) {
+    debounce(`add-${filePath}`, async () => {
+      const filename = path.basename(filePath)
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        const mission = parseMissionFile(content, filename)
+        broadcast({
+          type: 'mission:new',
+          payload: mission
+        })
+      } catch {}
+    })
+  }
+})
+
+watcher.on('unlink', (filePath) => {
+  if (filePath.includes('/mission-control/active/')) {
+    const filename = path.basename(filePath)
+    broadcast({
+      type: 'mission:removed',
+      payload: { id: filename }
+    })
+  }
+})
+
+// Periodic stats broadcast (every 10 seconds)
+setInterval(async () => {
+  const agents = Object.keys(AGENT_META)
+  let activeCount = 0
+  
+  for (const agent of agents) {
+    const status = await getAgentStatus(agent)
+    if (status === 'working') activeCount++
+  }
+  
+  // Count queued missions
+  let queuedMissions = 0
+  try {
+    const files = await fs.readdir(path.join(MISSION_CONTROL_PATH, 'active'))
+    queuedMissions = files.filter(f => f.endsWith('.md')).length
+  } catch {}
+  
+  broadcast({
+    type: 'stats:update',
+    payload: {
+      activeAgents: activeCount,
+      totalAgents: agents.length,
+      queuedMissions,
+      timestamp: Date.now()
+    }
+  })
+}, 10000)
+
+// ============================================
+// REST API Endpoints (existing)
+// ============================================
 
 // Helper: Get agent info from AGENT_META (canonical source)
 async function parseAgentSoul(agentDir) {
@@ -46,7 +237,8 @@ async function parseAgentSoul(agentDir) {
   return { 
     name: agentDir.toUpperCase(), 
     emoji: meta.emoji || '🤖', 
-    role: meta.role || 'Agent', 
+    role: meta.role || 'Agent',
+    color: meta.color || '#6b7280',
     dir: agentDir 
   }
 }
@@ -297,7 +489,14 @@ app.get('/api/feed', async (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    websocket: {
+      port: WS_PORT,
+      clients: clients.size
+    }
+  })
 })
 
 // Serve static files from dist/ in production
@@ -312,5 +511,7 @@ app.get('/{*path}', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mission Control running on http://0.0.0.0:${PORT}`)
+  console.log(`WebSocket server running on ws://0.0.0.0:${WS_PORT}`)
   console.log(`Reading from: ${CLAWD_PATH}`)
+  console.log(`Watching: ${watchPaths.join(', ')}`)
 })

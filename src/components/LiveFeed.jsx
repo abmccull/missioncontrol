@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // Our actual agent squad emojis
 const agentEmojis = {
@@ -28,7 +28,7 @@ const fallbackFeed = [
 
 const tabs = ['All', 'Tasks', 'Comments', 'Docs', 'Status']
 
-export default function LiveFeed({ feed, loading }) {
+export default function LiveFeed({ feed, loading, isConnected }) {
   const [activeTab, setActiveTab] = useState('All')
   const displayFeed = feed.length > 0 ? feed : fallbackFeed
 
@@ -46,8 +46,9 @@ export default function LiveFeed({ feed, loading }) {
     <aside className="w-80 bg-[#1a1f2e] border-l border-gray-700 flex flex-col">
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center gap-2 mb-3">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
           <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Live Feed</h2>
+          <span className="text-xs text-gray-500 ml-auto">{displayFeed.length} events</span>
         </div>
         
         <div className="flex gap-1">
@@ -83,11 +84,32 @@ export default function LiveFeed({ feed, loading }) {
 }
 
 function FeedItem({ item }) {
-  const { agent, action, target, time } = item
+  const { agent, action, target, time, _new } = item
+  const [isNew, setIsNew] = useState(_new)
+  
+  // Clear "new" animation after it plays
+  useEffect(() => {
+    if (_new) {
+      const timer = setTimeout(() => setIsNew(false), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [_new])
   
   return (
-    <div className="flex items-start gap-3 p-2 rounded hover:bg-[#242b3d]/50 transition-colors">
-      <div className="w-6 h-6 rounded-full bg-[#242b3d] flex items-center justify-center text-xs flex-shrink-0">
+    <div className={`
+      flex items-start gap-3 p-2 rounded transition-all duration-300
+      hover:bg-[#242b3d]/50
+      ${isNew ? 'bg-green-400/10 translate-x-0 opacity-100 animate-slide-in' : ''}
+    `}
+    style={{
+      animation: isNew ? 'slideIn 0.3s ease-out' : 'none'
+    }}
+    >
+      <div className={`
+        w-6 h-6 rounded-full bg-[#242b3d] flex items-center justify-center text-xs flex-shrink-0
+        transition-transform duration-300
+        ${isNew ? 'scale-110' : ''}
+      `}>
         {agentEmojis[agent] || agent?.[0] || '?'}
       </div>
       

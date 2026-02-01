@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+
 const statusColors = {
   working: 'bg-green-400',
   standby: 'bg-yellow-400',
@@ -19,17 +21,30 @@ const typeColors = {
 }
 
 export default function AgentCard({ agent }) {
-  const { name, emoji, role, status, type = 'SPC', lastSeen, currentTask } = agent
+  const { name, emoji, role, status, type = 'SPC', lastSeen, currentTask, _updated } = agent
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  // Trigger animation when agent status changes
+  useEffect(() => {
+    if (_updated) {
+      setIsAnimating(true)
+      const timer = setTimeout(() => setIsAnimating(false), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [_updated])
 
   return (
     <div className={`
-      p-3 rounded-lg cursor-pointer transition-all
+      p-3 rounded-lg cursor-pointer transition-all duration-300
       ${status === 'working' ? 'bg-[#242b3d] border-l-2 border-green-400' : ''}
       ${status === 'blocked' ? 'bg-[#2d242b] border-l-2 border-red-400' : ''}
       ${status !== 'working' && status !== 'blocked' ? 'hover:bg-[#242b3d]/50' : ''}
+      ${isAnimating ? 'scale-[1.02] shadow-lg shadow-green-400/10' : ''}
     `}>
       <div className="flex items-start gap-3">
-        <div className="text-lg">{emoji || '🤖'}</div>
+        <div className={`text-lg transition-transform duration-300 ${isAnimating ? 'scale-110' : ''}`}>
+          {emoji || '🤖'}
+        </div>
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -48,8 +63,13 @@ export default function AgentCard({ agent }) {
 
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${statusColors[status] || statusColors.offline} ${status === 'working' ? 'animate-pulse' : ''}`}></span>
-            <span className={`text-[10px] font-medium ${
+            <span className={`
+              w-2 h-2 rounded-full transition-all duration-300
+              ${statusColors[status] || statusColors.offline} 
+              ${status === 'working' ? 'animate-pulse' : ''}
+              ${isAnimating ? 'scale-150' : ''}
+            `}></span>
+            <span className={`text-[10px] font-medium transition-colors duration-300 ${
               status === 'working' ? 'text-green-400' : 
               status === 'blocked' ? 'text-red-400' :
               status === 'standby' ? 'text-yellow-400' : 'text-gray-500'
