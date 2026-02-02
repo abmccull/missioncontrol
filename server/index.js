@@ -1564,6 +1564,77 @@ function getAge(dateStr) {
   return 'just now'
 }
 
+// GET /api/builds - Build history from mission-control/builds/
+app.get('/api/builds', async (req, res) => {
+  try {
+    const { limit = 20, agent } = req.query
+    const buildsPath = path.join(MISSION_CONTROL_PATH, 'builds')
+    
+    const builds = []
+    
+    try {
+      const files = await fs.readdir(buildsPath)
+      
+      for (const file of files.slice(-parseInt(limit) * 2)) {
+        if (!file.endsWith('.md')) continue
+        
+        // Filter by agent if specified
+        if (agent && !file.toLowerCase().startsWith(agent.toLowerCase())) continue
+        
+        try {
+          const filePath = path.join(buildsPath, file)
+          const content = await fs.readFile(filePath, 'utf-8')
+          const stats = await fs.stat(filePath)
+          
+          // Parse build info
+          const titleMatch = content.match(/^#\s*(.+)/m)
+          const title = titleMatch ? titleMatch[1].slice(0, 80) : file.replace('.md', '')
+          
+          // Extract agent from filename
+          const agentMatch = file.match(/^(\w+)-/)
+          const buildAgent = agentMatch ? agentMatch[1].toUpperCase() : 'UNKNOWN'
+          
+          // Look for status indicators
+          const isComplete = content.includes('✅') || content.toLowerCase().includes('complete')
+          const isFailed = content.includes('❌') || content.toLowerCase().includes('failed')
+          
+          // Get project from content
+          const projectMatch = content.match(/(?:Project|Repo):\s*(\S+)/i)
+          const project = projectMatch ? projectMatch[1] : null
+          
+          builds.push({
+            id: file,
+            title,
+            agent: buildAgent,
+            project,
+            status: isFailed ? 'failed' : isComplete ? 'complete' : 'in-progress',
+            timestamp: stats.mtime,
+            age: getAge(stats.mtime.toISOString())
+          })
+        } catch (err) {
+          // Skip individual file errors
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading builds:', err.message)
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    builds.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      count: builds.length,
+      builds: builds.slice(0, parseInt(limit))
+    })
+  } catch (err) {
+    console.error('Error fetching builds:', err)
+    res.status(500).json({ error: 'Failed to fetch builds' })
+  }
+})
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))
