@@ -1118,6 +1118,106 @@ app.get('/api/agents/:name/crons', async (req, res) => {
   }
 })
 
+// GET /api/alerts - Aggregate alerts from alerts/ and escalations/
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const alerts = []
+    const { limit = 20, unread } = req.query
+    
+    // Read from alerts/ directory
+    try {
+      const alertsPath = path.join(MISSION_CONTROL_PATH, 'alerts')
+      const files = await fs.readdir(alertsPath)
+      
+      for (const file of files.slice(-20)) {
+        if (!file.endsWith('.md')) continue
+        
+        try {
+          const content = await fs.readFile(path.join(alertsPath, file), 'utf-8')
+          const stats = await fs.stat(path.join(alertsPath, file))
+          
+          // Parse priority from content
+          const priorityMatch = content.match(/Priority:\s*🔴|Priority:\s*HIGH|CRITICAL|URGENT/i)
+          const priority = priorityMatch ? 'high' : 'medium'
+          
+          // Parse title
+          const titleMatch = content.match(/^#\s*(.+)/m)
+          const title = titleMatch ? titleMatch[1].slice(0, 60) : file.replace('.md', '')
+          
+          // Parse from/agent
+          const fromMatch = content.match(/(?:From|Agent):\s*(\w+)/i)
+          const agent = fromMatch ? fromMatch[1].toUpperCase() : null
+          
+          alerts.push({
+            id: file,
+            type: 'alert',
+            title,
+            agent,
+            priority,
+            timestamp: stats.mtime,
+            source: 'alerts'
+          })
+        } catch (err) {
+          // Skip individual file errors
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading alerts:', err.message)
+      }
+    }
+    
+    // Read from escalations/ directory
+    try {
+      const escalationsPath = path.join(MISSION_CONTROL_PATH, 'escalations')
+      const files = await fs.readdir(escalationsPath)
+      
+      for (const file of files.slice(-20)) {
+        if (!file.endsWith('.md')) continue
+        
+        try {
+          const content = await fs.readFile(path.join(escalationsPath, file), 'utf-8')
+          const stats = await fs.stat(path.join(escalationsPath, file))
+          
+          const titleMatch = content.match(/^#\s*(.+)/m)
+          const title = titleMatch ? titleMatch[1].slice(0, 60) : file.replace('.md', '')
+          
+          const fromMatch = content.match(/(?:From|Agent):\s*(\w+)/i)
+          const agent = fromMatch ? fromMatch[1].toUpperCase() : null
+          
+          alerts.push({
+            id: file,
+            type: 'escalation',
+            title,
+            agent,
+            priority: 'high',
+            timestamp: stats.mtime,
+            source: 'escalations'
+          })
+        } catch (err) {
+          // Skip individual file errors
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading escalations:', err.message)
+      }
+    }
+    
+    // Sort by timestamp (newest first) and limit
+    alerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      count: alerts.length,
+      alerts: alerts.slice(0, parseInt(limit))
+    })
+  } catch (err) {
+    console.error('Error fetching alerts:', err)
+    res.status(500).json({ error: 'Failed to fetch alerts' })
+  }
+})
+
 // GET /api/logs - List and read log files
 app.get('/api/logs', async (req, res) => {
   try {
