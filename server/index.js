@@ -1485,6 +1485,85 @@ app.get('/api/metrics', async (req, res) => {
   }
 })
 
+// GET /api/prs - Aggregate open PRs across monitored repos
+app.get('/api/prs', async (req, res) => {
+  try {
+    const { execSync } = await import('child_process')
+    
+    // Active repos to monitor
+    const repos = [
+      'abmccull/churn-buster',
+      'abmccull/missioncontrol',
+      'abmccull/disputeshield-ai'
+    ]
+    
+    const allPRs = []
+    
+    for (const repo of repos) {
+      try {
+        const prJson = execSync(
+          `gh pr list --repo ${repo} --state open --json number,title,author,createdAt,url,labels,headRefName,isDraft --limit 10`,
+          { encoding: 'utf-8', timeout: 10000 }
+        )
+        
+        const prs = JSON.parse(prJson)
+        
+        for (const pr of prs) {
+          allPRs.push({
+            repo: repo.split('/')[1],
+            repoFull: repo,
+            number: pr.number,
+            title: pr.title,
+            author: pr.author?.login || 'unknown',
+            branch: pr.headRefName,
+            isDraft: pr.isDraft,
+            labels: pr.labels?.map(l => l.name) || [],
+            url: pr.url,
+            createdAt: pr.createdAt,
+            age: getAge(pr.createdAt)
+          })
+        }
+      } catch (err) {
+        console.error(`Error fetching PRs for ${repo}:`, err.message)
+        // Continue with other repos
+      }
+    }
+    
+    // Sort by created date (newest first)
+    allPRs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    
+    // Group by repo
+    const byRepo = {}
+    for (const pr of allPRs) {
+      if (!byRepo[pr.repo]) byRepo[pr.repo] = []
+      byRepo[pr.repo].push(pr)
+    }
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalOpen: allPRs.length,
+      byRepo,
+      prs: allPRs
+    })
+  } catch (err) {
+    console.error('Error fetching PRs:', err)
+    res.status(500).json({ error: 'Failed to fetch PRs' })
+  }
+})
+
+// Helper: Get human-readable age
+function getAge(dateStr) {
+  const created = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now - created
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffHours / 24)
+  
+  if (diffDays > 0) return `${diffDays}d ago`
+  if (diffHours > 0) return `${diffHours}h ago`
+  return 'just now'
+}
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))
