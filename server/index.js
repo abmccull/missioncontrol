@@ -1118,6 +1118,99 @@ app.get('/api/agents/:name/crons', async (req, res) => {
   }
 })
 
+// GET /api/logs - List and read log files
+app.get('/api/logs', async (req, res) => {
+  try {
+    const logsPath = path.join(CLAWD_PATH, 'logs')
+    const { file, lines = 50 } = req.query
+    
+    if (file) {
+      // Read specific log file
+      const filePath = path.join(logsPath, path.basename(file)) // Prevent path traversal
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        const logLines = content.split('\n').slice(-parseInt(lines))
+        res.json({
+          file,
+          lines: logLines.length,
+          content: logLines.join('\n')
+        })
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          res.status(404).json({ error: 'Log file not found' })
+        } else {
+          throw err
+        }
+      }
+    } else {
+      // List log files
+      const files = []
+      
+      async function scanDir(dir, prefix = '') {
+        try {
+          const entries = await fs.readdir(dir, { withFileTypes: true })
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name)
+            const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
+            
+            if (entry.isDirectory()) {
+              await scanDir(fullPath, relativePath)
+            } else if (entry.name.endsWith('.log') || entry.name.endsWith('.txt')) {
+              const stats = await fs.stat(fullPath)
+              files.push({
+                name: relativePath,
+                size: stats.size,
+                modified: stats.mtime,
+                sizeHuman: stats.size > 1024 ? `${(stats.size / 1024).toFixed(1)}KB` : `${stats.size}B`
+              })
+            }
+          }
+        } catch (err) {
+          // Ignore permission errors
+        }
+      }
+      
+      await scanDir(logsPath)
+      
+      // Sort by modified time, newest first
+      files.sort((a, b) => new Date(b.modified) - new Date(a.modified))
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        logsPath,
+        files: files.slice(0, 50) // Limit to 50 files
+      })
+    }
+  } catch (err) {
+    console.error('Error reading logs:', err)
+    res.status(500).json({ error: 'Failed to read logs' })
+  }
+})
+
+// GET /api/git - Git status and recent commits
+app.get('/api/git', async (req, res) => {
+  try {
+    const { execSync } = await import('child_process')
+    
+    const status = execSync('git status --short', { cwd: CLAWD_PATH, encoding: 'utf-8' })
+    const commits = execSync('git log --oneline -10', { cwd: CLAWD_PATH, encoding: 'utf-8' })
+    const branch = execSync('git branch --show-current', { cwd: CLAWD_PATH, encoding: 'utf-8' }).trim()
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      branch,
+      status: status.trim().split('\n').filter(Boolean),
+      recentCommits: commits.trim().split('\n').map(line => {
+        const [hash, ...msg] = line.split(' ')
+        return { hash, message: msg.join(' ') }
+      })
+    })
+  } catch (err) {
+    console.error('Error getting git info:', err)
+    res.status(500).json({ error: 'Failed to get git info' })
+  }
+})
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))
