@@ -1118,6 +1118,58 @@ app.get('/api/agents/:name/crons', async (req, res) => {
   }
 })
 
+// GET /api/crons - List all cron jobs
+app.get('/api/crons', async (req, res) => {
+  try {
+    const { enabled } = req.query
+    const CRON_PATH = path.join(process.env.HOME || '/home/node', '.clawdbot', 'cron', 'jobs.json')
+    
+    const cronContent = await fs.readFile(CRON_PATH, 'utf-8')
+    const cronData = JSON.parse(cronContent)
+    
+    let jobs = (cronData.jobs || []).map(job => ({
+      id: job.id,
+      name: job.name,
+      enabled: job.enabled,
+      schedule: job.schedule,
+      sessionTarget: job.sessionTarget,
+      payloadKind: job.payload?.kind,
+      payloadText: job.payload?.text?.slice(0, 100) || job.payload?.message?.slice(0, 100),
+      nextRun: job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : null,
+      lastRun: job.state?.lastRunAtMs ? new Date(job.state.lastRunAtMs).toISOString() : null,
+      lastStatus: job.state?.lastStatus,
+      runCount: job.state?.runCount || 0
+    }))
+    
+    // Filter by enabled status if specified
+    if (enabled !== undefined) {
+      const enabledBool = enabled === 'true'
+      jobs = jobs.filter(j => j.enabled === enabledBool)
+    }
+    
+    // Sort by next run time
+    jobs.sort((a, b) => {
+      if (!a.nextRun) return 1
+      if (!b.nextRun) return -1
+      return new Date(a.nextRun) - new Date(b.nextRun)
+    })
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalJobs: jobs.length,
+      enabledJobs: jobs.filter(j => j.enabled).length,
+      jobs
+    })
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.json({ timestamp: new Date().toISOString(), totalJobs: 0, enabledJobs: 0, jobs: [] })
+    } else {
+      console.error('Error reading crons:', err)
+      res.status(500).json({ error: 'Failed to read crons' })
+    }
+  }
+})
+
 // GET /api/alerts - Aggregate alerts from alerts/ and escalations/
 app.get('/api/alerts', async (req, res) => {
   try {
