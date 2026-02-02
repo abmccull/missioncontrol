@@ -288,10 +288,11 @@ async function getAgentStatus(agentDir) {
       }
     }
     
-    // If WORKING.md was modified in last 5 minutes = working
-    // If modified in last 30 minutes = standby  
-    // Otherwise = offline
-    if (ageMinutes < 5) return 'working'
+    // Status based on WORKING.md mtime:
+    // ACTIVE (green): modified < 2 min ago
+    // STANDBY (yellow): modified < 30 min ago
+    // OFFLINE (gray): modified > 30 min ago
+    if (ageMinutes < 2) return 'working'
     if (ageMinutes < 30) return 'standby'
     return 'offline'
   } catch (err) {
