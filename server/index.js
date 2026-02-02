@@ -1311,6 +1311,128 @@ app.get('/api/git', async (req, res) => {
   }
 })
 
+// GET /api/metrics - Aggregated squad performance metrics
+app.get('/api/metrics', async (req, res) => {
+  try {
+    const { execSync } = await import('child_process')
+    const today = new Date().toISOString().split('T')[0]
+    const metrics = {
+      timestamp: new Date().toISOString(),
+      today,
+      agents: {},
+      summary: {
+        totalAgents: 0,
+        activeAgents: 0,
+        blockedAgents: 0,
+        idleAgents: 0,
+        tasksCompletedToday: 0,
+        alertsToday: 0,
+        buildsToday: 0
+      }
+    }
+
+    // Read agent WORKING.md files for activity data
+    const agentNames = Object.keys(AGENT_META)
+    for (const name of agentNames) {
+      try {
+        const workingPath = path.join(MEMORY_PATH, name, 'WORKING.md')
+        const content = await fs.readFile(workingPath, 'utf-8')
+        
+        // Extract status
+        const statusMatch = content.match(/\*\*Status:\*\*\s*(.+)/i)
+        const status = statusMatch ? statusMatch[1].toLowerCase() : 'unknown'
+        
+        // Count tasks/builds for FORGE
+        let tasksToday = 0
+        if (name === 'forge') {
+          const buildMatch = content.match(/Today's Build Count:\s*(\d+)/i)
+          if (buildMatch) {
+            tasksToday = parseInt(buildMatch[1])
+            metrics.summary.buildsToday = tasksToday
+          }
+        }
+        
+        // Track activity lines mentioning today
+        const todayMentions = (content.match(new RegExp(today, 'g')) || []).length
+        
+        metrics.agents[name] = {
+          status: status.includes('active') || status.includes('working') ? 'active' : 
+                  status.includes('block') ? 'blocked' : 
+                  status.includes('idle') || status.includes('standby') ? 'idle' : 'unknown',
+          tasksToday,
+          activityToday: todayMentions > 0
+        }
+        
+        metrics.summary.totalAgents++
+        if (metrics.agents[name].status === 'active') metrics.summary.activeAgents++
+        if (metrics.agents[name].status === 'blocked') metrics.summary.blockedAgents++
+        if (metrics.agents[name].status === 'idle') metrics.summary.idleAgents++
+        
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error(`Error reading ${name} WORKING.md:`, err.message)
+        }
+      }
+    }
+
+    // Count completed missions today
+    try {
+      const completedPath = path.join(MISSION_CONTROL_PATH, 'completed')
+      const files = await fs.readdir(completedPath)
+      for (const file of files) {
+        try {
+          const stat = await fs.stat(path.join(completedPath, file))
+          if (stat.mtime.toISOString().startsWith(today)) {
+            metrics.summary.tasksCompletedToday++
+          }
+        } catch (err) {
+          // Ignore
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading completed missions:', err.message)
+      }
+    }
+
+    // Count alerts today
+    try {
+      const alertsPath = path.join(MISSION_CONTROL_PATH, 'alerts')
+      const files = await fs.readdir(alertsPath)
+      for (const file of files) {
+        try {
+          const stat = await fs.stat(path.join(alertsPath, file))
+          if (stat.mtime.toISOString().startsWith(today)) {
+            metrics.summary.alertsToday++
+          }
+        } catch (err) {
+          // Ignore
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('Error reading alerts:', err.message)
+      }
+    }
+
+    // Git activity today
+    try {
+      const gitLog = execSync(
+        `git log --oneline --since="${today}T00:00:00" | wc -l`,
+        { cwd: CLAWD_PATH, encoding: 'utf-8' }
+      )
+      metrics.summary.commitsToday = parseInt(gitLog.trim()) || 0
+    } catch (err) {
+      metrics.summary.commitsToday = 0
+    }
+
+    res.json(metrics)
+  } catch (err) {
+    console.error('Error computing metrics:', err)
+    res.status(500).json({ error: 'Failed to compute metrics' })
+  }
+})
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))
