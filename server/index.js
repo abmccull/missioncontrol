@@ -693,6 +693,179 @@ app.get('/api/health', (req, res) => {
   })
 })
 
+// GET /api/system - System metrics for monitoring
+app.get('/api/system', async (req, res) => {
+  try {
+    const os = await import('os')
+    const { exec } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(exec)
+    
+    // Memory info
+    const totalMem = os.totalmem()
+    const freeMem = os.freemem()
+    const usedMem = totalMem - freeMem
+    const memPercent = Math.round((usedMem / totalMem) * 100)
+    
+    // CPU load
+    const loadAvg = os.loadavg()
+    
+    // Disk usage (async)
+    let diskPercent = 0
+    let diskUsed = '0G'
+    let diskTotal = '0G'
+    try {
+      const { stdout } = await execAsync("df -h / | tail -1 | awk '{print $5, $3, $2}'")
+      const parts = stdout.trim().split(' ')
+      diskPercent = parseInt(parts[0]) || 0
+      diskUsed = parts[1] || '0G'
+      diskTotal = parts[2] || '0G'
+    } catch (e) {
+      // Ignore disk errors
+    }
+    
+    // Process count
+    let processCount = 0
+    let zombieCount = 0
+    try {
+      const { stdout: psOut } = await execAsync("ps aux | wc -l")
+      processCount = parseInt(psOut.trim()) - 1 // subtract header
+      const { stdout: zombieOut } = await execAsync("ps aux | grep -c 'Z\\s' || echo 0")
+      zombieCount = parseInt(zombieOut.trim()) || 0
+    } catch (e) {
+      // Ignore ps errors
+    }
+    
+    // Uptime
+    const uptimeSeconds = os.uptime()
+    const uptimeHours = Math.floor(uptimeSeconds / 3600)
+    const uptimeMins = Math.floor((uptimeSeconds % 3600) / 60)
+    
+    // Agent health (count active from recent heartbeats)
+    const knownAgents = Object.keys(AGENT_META)
+    let activeAgents = 0
+    let standbyAgents = 0
+    let offlineAgents = 0
+    
+    for (const agent of knownAgents) {
+      const status = await getAgentStatus(agent)
+      if (status === 'working') activeAgents++
+      else if (status === 'standby') standbyAgents++
+      else offlineAgents++
+    }
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      memory: {
+        percent: memPercent,
+        used: `${(usedMem / 1024 / 1024 / 1024).toFixed(1)}GB`,
+        total: `${(totalMem / 1024 / 1024 / 1024).toFixed(1)}GB`
+      },
+      disk: {
+        percent: diskPercent,
+        used: diskUsed,
+        total: diskTotal
+      },
+      cpu: {
+        load1m: loadAvg[0].toFixed(2),
+        load5m: loadAvg[1].toFixed(2),
+        load15m: loadAvg[2].toFixed(2),
+        cores: os.cpus().length
+      },
+      processes: {
+        total: processCount,
+        zombies: zombieCount
+      },
+      uptime: {
+        seconds: uptimeSeconds,
+        formatted: `${uptimeHours}h ${uptimeMins}m`
+      },
+      agents: {
+        active: activeAgents,
+        standby: standbyAgents,
+        offline: offlineAgents,
+        total: knownAgents.length
+      },
+      health: memPercent < 80 && diskPercent < 85 && zombieCount < 10 ? 'healthy' : 'warning'
+    })
+  } catch (err) {
+    console.error('Error getting system metrics:', err)
+    res.status(500).json({ error: 'Failed to get system metrics' })
+  }
+})
+
+// GET /api/backlog - Get prioritized backlog
+app.get('/api/backlog', async (req, res) => {
+  try {
+    const backlogPath = path.join(CLAWD_PATH, 'backlog', 'priorities.md')
+    const content = await fs.readFile(backlogPath, 'utf-8')
+    
+    const items = []
+    const lines = content.split('\n')
+    
+    let currentSection = null
+    let currentItem = null
+    
+    for (const line of lines) {
+      // Section headers
+      if (line.startsWith('## 🔴 Active')) currentSection = 'active'
+      else if (line.startsWith('## 🟡 Backlog')) currentSection = 'backlog'
+      else if (line.startsWith('## ✅ Completed')) currentSection = 'completed'
+      
+      // Item titles (### numbered items)
+      const itemMatch = line.match(/^###\s*(\d+)\.\s*(.+)/)
+      if (itemMatch && currentSection) {
+        if (currentItem) items.push(currentItem)
+        currentItem = {
+          rank: parseInt(itemMatch[1]),
+          title: itemMatch[2].trim(),
+          section: currentSection,
+          project: null,
+          type: null,
+          scope: null
+        }
+      }
+      
+      // Item metadata
+      if (currentItem) {
+        const projectMatch = line.match(/\*\*Project:\*\*\s*(.+)/)
+        if (projectMatch) currentItem.project = projectMatch[1].trim()
+        
+        const typeMatch = line.match(/\*\*Type:\*\*\s*(.+)/)
+        if (typeMatch) currentItem.type = typeMatch[1].trim()
+        
+        const scopeMatch = line.match(/\*\*Scope:\*\*\s*(.+)/)
+        if (scopeMatch) currentItem.scope = scopeMatch[1].trim()
+      }
+    }
+    
+    // Push last item
+    if (currentItem) items.push(currentItem)
+    
+    // Group by section
+    const active = items.filter(i => i.section === 'active')
+    const backlog = items.filter(i => i.section === 'backlog')
+    const completed = items.filter(i => i.section === 'completed').slice(-5)
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      nextUp: active[0] || null,
+      active,
+      backlog,
+      recentCompleted: completed,
+      totalActive: active.length,
+      totalBacklog: backlog.length
+    })
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.json({ active: [], backlog: [], recentCompleted: [], totalActive: 0, totalBacklog: 0 })
+    } else {
+      console.error('Error reading backlog:', err)
+      res.status(500).json({ error: 'Failed to read backlog' })
+    }
+  }
+})
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))
