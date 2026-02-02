@@ -4,6 +4,8 @@ import AgentPanel from './components/AgentPanel'
 import MissionQueue from './components/MissionQueue'
 import LiveFeed from './components/LiveFeed'
 import MobileNav from './components/MobileNav'
+import TaskDetailModal from './components/TaskDetailModal'
+import CreateTaskModal from './components/CreateTaskModal'
 import useWebSocket from './hooks/useWebSocket'
 
 function App() {
@@ -16,6 +18,12 @@ function App() {
   // Mobile state
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeView, setActiveView] = useState('missions') // 'agents' | 'missions' | 'feed'
+  
+  // Modal state
+  const [selectedTask, setSelectedTask] = useState(null)
+  const [selectedTaskColumn, setSelectedTaskColumn] = useState(null)
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   
   const { isConnected, lastMessage, connectionStatus } = useWebSocket()
 
@@ -69,6 +77,56 @@ function App() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Task modal handlers
+  const handleTaskClick = useCallback((task, column) => {
+    setSelectedTask(task)
+    setSelectedTaskColumn(column)
+    setIsTaskModalOpen(true)
+  }, [])
+
+  const handleCloseTaskModal = useCallback(() => {
+    setIsTaskModalOpen(false)
+    setSelectedTask(null)
+    setSelectedTaskColumn(null)
+  }, [])
+
+  const handleCompleteTask = useCallback(async (taskId) => {
+    try {
+      const response = await fetch(`${API_URL}/api/missions/${taskId}/complete`, {
+        method: 'POST',
+      })
+      if (!response.ok) throw new Error('Failed to complete task')
+      // The WebSocket will update the UI, or we can manually update
+      setMissions(prev => ({
+        ...prev,
+        queue: prev.queue.filter(m => m.id !== taskId),
+        progress: prev.progress.filter(m => m.id !== taskId),
+        review: prev.review.filter(m => m.id !== taskId),
+        done: [{ id: taskId, status: 'done', ...selectedTask }, ...prev.done.slice(0, 9)]
+      }))
+    } catch (err) {
+      console.error('Failed to complete task:', err)
+      throw err
+    }
+  }, [API_URL, selectedTask])
+
+  // Create task handlers
+  const handleNewTaskClick = useCallback(() => {
+    setIsCreateModalOpen(true)
+  }, [])
+
+  const handleCloseCreateModal = useCallback(() => {
+    setIsCreateModalOpen(false)
+  }, [])
+
+  const handleTaskCreated = useCallback((newTask) => {
+    // Add to queue immediately
+    setMissions(prev => ({
+      ...prev,
+      queue: [newTask, ...prev.queue]
+    }))
+  }, [])
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -155,6 +213,7 @@ function App() {
         isConnected={isConnected}
         connectionStatus={connectionStatus}
         onMenuClick={() => setSidebarOpen(true)}
+        onNewTask={handleNewTaskClick}
       />
       
       {/* Mobile sidebar overlay */}
@@ -170,7 +229,7 @@ function App() {
         <AgentPanel agents={agents} loading={loading} />
         
         {/* Center - Mission Queue */}
-        <MissionQueue missions={missions} loading={loading} />
+        <MissionQueue missions={missions} loading={loading} onTaskClick={handleTaskClick} />
         
         {/* Right Sidebar - Live Feed */}
         <LiveFeed feed={feed} loading={loading} isConnected={isConnected} />
@@ -194,7 +253,7 @@ function App() {
             <AgentPanel agents={agents} loading={loading} isMobile={true} inline={true} />
           )}
           {activeView === 'missions' && (
-            <MissionQueue missions={missions} loading={loading} isMobile={true} />
+            <MissionQueue missions={missions} loading={loading} isMobile={true} onTaskClick={handleTaskClick} />
           )}
           {activeView === 'feed' && (
             <LiveFeed feed={feed} loading={loading} isMobile={true} isConnected={isConnected} />
@@ -204,6 +263,23 @@ function App() {
 
       {/* Mobile bottom navigation */}
       <MobileNav activeView={activeView} onViewChange={setActiveView} />
+
+      {/* Task Detail Modal */}
+      <TaskDetailModal
+        task={selectedTask}
+        column={selectedTaskColumn}
+        isOpen={isTaskModalOpen}
+        onClose={handleCloseTaskModal}
+        onComplete={handleCompleteTask}
+      />
+
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseCreateModal}
+        onSubmit={handleTaskCreated}
+        apiUrl={API_URL}
+      />
     </div>
   )
 }

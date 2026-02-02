@@ -91,8 +91,8 @@ export default function AgentCard({ agent, compact = false }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-full ${statusColors[status] || statusColors.offline} ${status === 'working' ? 'animate-pulse' : ''}`}></span>
+          <div className="flex items-center gap-1 ml-1 flex-shrink-0">
+            <span className={`w-2.5 h-2.5 rounded-full ${statusColors[status] || statusColors.offline} ${status === 'working' ? 'status-pulse' : ''}`}></span>
           </div>
         </div>
       </div>
@@ -131,17 +131,17 @@ export default function AgentCard({ agent, compact = false }) {
           <div className="text-xs text-gray-500 truncate">{role}</div>
         </div>
 
-        <div className="flex flex-col items-end gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className={`
-              w-2 h-2 rounded-full transition-all duration-300
-              ${statusColors[status] || statusColors.offline} 
-              ${status === 'working' ? 'animate-pulse' : ''}
-              ${isAnimating ? 'scale-150' : ''}
-            `}></span>
+        <div className="flex flex-col items-end gap-0.5 ml-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
             <span className={`text-[10px] font-medium ${statusTextColors[status] || 'text-gray-500'}`}>
               {statusLabels[status] || 'OFFLINE'}
             </span>
+            <span className={`
+              w-2.5 h-2.5 rounded-full transition-all duration-300 flex-shrink-0
+              ${statusColors[status] || statusColors.offline} 
+              ${status === 'working' ? 'status-pulse' : ''}
+              ${isAnimating ? 'scale-125' : ''}
+            `}></span>
           </div>
         </div>
       </div>

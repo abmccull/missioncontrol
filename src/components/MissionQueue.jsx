@@ -23,9 +23,13 @@ const columns = [
   { key: 'done', label: 'DONE', color: 'bg-green-500', textColor: 'text-green-400' },
 ]
 
-export default function MissionQueue({ missions, loading, isMobile = false }) {
+export default function MissionQueue({ missions, loading, isMobile = false, onTaskClick }) {
   const [activeColumn, setActiveColumn] = useState('queue')
   const [swipeMode, _setSwipeMode] = useState(true) // Horizontal swipe mode on mobile
+  
+  const handleTaskClick = (task, column) => {
+    if (onTaskClick) onTaskClick(task, column)
+  }
   
   const displayMissions = Object.keys(missions).some(k => missions[k]?.length > 0) 
     ? missions 
@@ -85,7 +89,7 @@ export default function MissionQueue({ missions, loading, isMobile = false }) {
                         <div className="text-center text-gray-600 text-xs py-8">No tasks</div>
                       ) : (
                         tasks.map((task, idx) => (
-                          <TaskCard key={task.id || idx} task={task} column={col.key} />
+                          <TaskCard key={task.id || idx} task={task} column={col.key} onClick={(t) => handleTaskClick(t, col.key)} />
                         ))
                       )}
                     </div>
@@ -104,7 +108,7 @@ export default function MissionQueue({ missions, loading, isMobile = false }) {
                 <div className="text-center text-gray-600 text-xs py-8">No tasks</div>
               ) : (
                 (displayMissions[activeColumn] || []).map((task, idx) => (
-                  <TaskCard key={task.id || idx} task={task} column={activeColumn} />
+                  <TaskCard key={task.id || idx} task={task} column={activeColumn} onClick={(t) => handleTaskClick(t, activeColumn)} />
                 ))
               )}
             </div>
@@ -163,7 +167,7 @@ export default function MissionQueue({ missions, loading, isMobile = false }) {
                   <div className="text-center text-gray-600 text-[10px] py-6 opacity-50">No tasks</div>
                 ) : (
                   tasks.map((task, idx) => (
-                    <TaskCard key={task.id || idx} task={task} column={col.key} />
+                    <TaskCard key={task.id || idx} task={task} column={col.key} onClick={(t) => handleTaskClick(t, col.key)} />
                   ))
                 )}
               </div>

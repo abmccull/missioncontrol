@@ -21,7 +21,7 @@ const connectionTextColors = {
   failed: 'text-red-400',
 }
 
-export default function Header({ activeCount, totalCount, queuedMissions = 0, connectionStatus = 'connecting', onMenuClick }) {
+export default function Header({ activeCount, totalCount, queuedMissions = 0, connectionStatus = 'connecting', onMenuClick, onNewTask }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -65,14 +65,7 @@ export default function Header({ activeCount, totalCount, queuedMissions = 0, co
           <h1 className="text-base md:text-lg font-semibold text-white">Mission Control</h1>
         </div>
         
-        <div className="header-dropdown hidden md:flex items-center gap-4 text-sm text-gray-400">
-          <div className="flex items-center gap-2 bg-[#242b3d] px-3 py-1.5 rounded-lg">
-            <span>All Products</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
+{/* Removed All Products dropdown - meaningless in this context */}
       </div>
 
       <div className="flex items-center gap-3 md:gap-6">
@@ -89,7 +82,10 @@ export default function Header({ activeCount, totalCount, queuedMissions = 0, co
         </div>
 
         {/* New Task button */}
-        <button className="header-new-task bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-colors touch-target">
+        <button 
+          onClick={onNewTask}
+          className="header-new-task bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-colors touch-target"
+        >
           <span>+</span>
           <span className="hidden sm:inline">New Task</span>
         </button>

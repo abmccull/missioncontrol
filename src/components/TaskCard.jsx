@@ -32,13 +32,23 @@ const tagColors = {
   'competitive-analysis': 'bg-orange-500/20 text-orange-400',
 }
 
-export default function TaskCard({ task }) {
+export default function TaskCard({ task, onClick }) {
   const { title, description, priority = 'medium', agent, tags = [], created, comments = 0 } = task
   const agentInitial = agent?.[0] || '?'
   const agentColor = agentColors[agent] || '#6b7280'
 
+  const handleClick = () => {
+    if (onClick) onClick(task)
+  }
+
   return (
-    <div className="task-card bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group border border-transparent hover:border-gray-600 touch-target">
+    <div 
+      className="task-card bg-[#242b3d] rounded-lg p-3 hover:bg-[#2a3347] transition-colors cursor-pointer group border border-transparent hover:border-gray-600 touch-target"
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick() }}
+    >
       {/* Priority Badge */}
       {priority && priority !== 'medium' && (
         <div className="mb-2">
