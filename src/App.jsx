@@ -19,13 +19,16 @@ function App() {
   
   const { isConnected, lastMessage, connectionStatus } = useWebSocket()
 
+  // API base URL
+  const API_URL = import.meta.env.VITE_API_URL || 'https://api.woodfloorwarehouse.cc'
+
   // Initial data fetch
   const fetchData = useCallback(async () => {
     try {
       const [agentsRes, missionsRes, feedRes] = await Promise.all([
-        fetch('/api/agents').then(r => r.json()).catch(() => ({ agents: [] })),
-        fetch('/api/missions').then(r => r.json()).catch(() => ({ queue: [], progress: [], review: [], done: [] })),
-        fetch('/api/feed').then(r => r.json()).catch(() => ({ feed: [] }))
+        fetch(`${API_URL}/api/agents`).then(r => r.json()).catch(() => ({ agents: [] })),
+        fetch(`${API_URL}/api/missions`).then(r => r.json()).catch(() => ({ queue: [], progress: [], review: [], done: [] })),
+        fetch(`${API_URL}/api/feed`).then(r => r.json()).catch(() => ({ feed: [] }))
       ])
       setAgents(agentsRes.agents || [])
       setMissions(missionsRes)
