@@ -7,6 +7,7 @@ import MobileNav from './components/MobileNav'
 import TaskDetailModal from './components/TaskDetailModal'
 import CreateTaskModal from './components/CreateTaskModal'
 import AgentProfilePanel from './components/AgentProfilePanel'
+import MetricsPanel from './components/MetricsPanel'
 import useWebSocket from './hooks/useWebSocket'
 
 function App() {
@@ -241,6 +242,11 @@ function App() {
         aria-hidden="true"
       />
       
+      {/* Metrics Summary Bar */}
+      <div className="hidden md:block px-4 py-3 border-b border-gray-800">
+        <MetricsPanel />
+      </div>
+
       {/* Desktop layout */}
       <div className="hidden md:flex flex-1 overflow-hidden">
         {/* Left Sidebar - Agents */}
