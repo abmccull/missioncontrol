@@ -46,9 +46,13 @@ const agentColors = {
   CRITIC: '#84cc16', // lime
 }
 
-export default function AgentCard({ agent, compact = false }) {
+export default function AgentCard({ agent, compact = false, onClick }) {
   const { name, emoji: _emoji, role, status, type = 'SPC', lastSeen: _lastSeen, currentTask, _updated } = agent
   const [isAnimating, setIsAnimating] = useState(false)
+  
+  const handleClick = () => {
+    if (onClick) onClick(agent)
+  }
 
   // Trigger animation when agent status changes
   useEffect(() => {
@@ -70,7 +74,9 @@ export default function AgentCard({ agent, compact = false }) {
   if (compact) {
     // Compact mobile view
     return (
-      <div className={`
+      <div 
+        onClick={handleClick}
+        className={`
         agent-card p-2.5 rounded-lg cursor-pointer transition-all touch-target
         ${status === 'working' ? 'bg-[#242b3d] border-l-2 border-green-400' : 'hover:bg-[#242b3d]/50'}
       `}>
@@ -101,7 +107,9 @@ export default function AgentCard({ agent, compact = false }) {
 
   // Standard view
   return (
-    <div className={`
+    <div 
+      onClick={handleClick}
+      className={`
       p-3 rounded-lg cursor-pointer transition-all duration-300
       ${status === 'working' ? 'bg-[#242b3d]' : ''}
       ${status === 'blocked' ? 'bg-[#2d242b]' : ''}

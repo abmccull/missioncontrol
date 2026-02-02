@@ -19,7 +19,7 @@ const fallbackAgents = [
   { name: 'CRITIC', emoji: '🎭', role: 'Quality Control', status: 'standby', type: 'SPC' },
 ]
 
-export default function AgentPanel({ agents, loading, isMobile = false, inline = false, onClose }) {
+export default function AgentPanel({ agents, loading, isMobile = false, inline = false, onClose, onAgentClick }) {
   const displayAgents = agents.length > 0 ? agents : fallbackAgents
   
   const activeCount = displayAgents.filter(a => a.status === 'working').length
@@ -54,7 +54,7 @@ export default function AgentPanel({ agents, loading, isMobile = false, inline =
             </div>
           ) : (
             displayAgents.map((agent, idx) => (
-              <AgentCard key={agent.name || idx} agent={agent} compact={false} />
+              <AgentCard key={agent.name || idx} agent={agent} compact={false} onClick={onAgentClick} />
             ))
           )}
         </div>
@@ -100,7 +100,7 @@ export default function AgentPanel({ agents, loading, isMobile = false, inline =
             </div>
           ) : (
             displayAgents.map((agent, idx) => (
-              <AgentCard key={agent.name || idx} agent={agent} compact={true} />
+              <AgentCard key={agent.name || idx} agent={agent} compact={true} onClick={onAgentClick} />
             ))
           )}
         </div>
@@ -155,7 +155,7 @@ export default function AgentPanel({ agents, loading, isMobile = false, inline =
         ) : (
           <div className="space-y-0.5">
             {displayAgents.map((agent, idx) => (
-              <AgentCard key={agent.name || idx} agent={agent} />
+              <AgentCard key={agent.name || idx} agent={agent} onClick={onAgentClick} />
             ))}
           </div>
         )}

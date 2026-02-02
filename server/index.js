@@ -866,6 +866,258 @@ app.get('/api/backlog', async (req, res) => {
   }
 })
 
+// ============================================
+// Agent Profile Endpoints (Phase 2)
+// ============================================
+
+// Path to cron jobs
+const CRON_PATH = path.join(process.env.HOME || '/home/node', '.clawdbot', 'cron', 'jobs.json')
+
+// Helper: Get SOUL.md excerpt
+async function getSoulExcerpt(agentName) {
+  try {
+    const soulPath = path.join(AGENTS_PATH, agentName.toLowerCase(), 'SOUL.md')
+    const content = await fs.readFile(soulPath, 'utf-8')
+    
+    // Skip the first header and get the next ~800 chars
+    const lines = content.split('\n')
+    let startIdx = 0
+    
+    // Find where content starts (after first # header)
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('#')) {
+        startIdx = i + 1
+        break
+      }
+    }
+    
+    // Get next ~800 chars of meaningful content
+    let excerpt = lines.slice(startIdx).join('\n').trim()
+    
+    // Truncate intelligently at a paragraph break if possible
+    if (excerpt.length > 1000) {
+      const breakPoint = excerpt.indexOf('\n\n', 600)
+      if (breakPoint > 0 && breakPoint < 1000) {
+        excerpt = excerpt.slice(0, breakPoint)
+      } else {
+        excerpt = excerpt.slice(0, 1000) + '...'
+      }
+    }
+    
+    return excerpt
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading SOUL.md for ${agentName}:`, err.message)
+    }
+    return null
+  }
+}
+
+// Helper: Get WORKING.md excerpt (last 20 lines of meaningful content)
+async function getWorkingExcerpt(agentName) {
+  try {
+    const workingPath = path.join(MEMORY_PATH, agentName.toLowerCase(), 'WORKING.md')
+    const content = await fs.readFile(workingPath, 'utf-8')
+    
+    // Get last meaningful section or last 30 lines
+    const lines = content.split('\n')
+    
+    // Find "This Session" or "This Heartbeat" section if exists
+    let sectionStart = -1
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('This Session') || 
+          lines[i].includes('This Heartbeat') || 
+          lines[i].includes('✅ DONE')) {
+        sectionStart = i
+        break
+      }
+    }
+    
+    if (sectionStart >= 0) {
+      // Find next section header or end
+      let sectionEnd = lines.length
+      for (let i = sectionStart + 1; i < lines.length; i++) {
+        if (lines[i].startsWith('## ') || lines[i].startsWith('---')) {
+          sectionEnd = i
+          break
+        }
+      }
+      return lines.slice(sectionStart, Math.min(sectionEnd, sectionStart + 25)).join('\n')
+    }
+    
+    // Fallback: return last 20 lines
+    return lines.slice(-20).join('\n')
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading WORKING.md for ${agentName}:`, err.message)
+    }
+    return null
+  }
+}
+
+// Helper: Get last heartbeat time from WORKING.md mtime
+async function getLastHeartbeat(agentName) {
+  try {
+    const workingPath = path.join(MEMORY_PATH, agentName.toLowerCase(), 'WORKING.md')
+    const stats = await fs.stat(workingPath)
+    return stats.mtime.getTime()
+  } catch (err) {
+    return null
+  }
+}
+
+// Helper: Count sessions today (from session files)
+async function getSessionsToday(agentName) {
+  try {
+    const sessionsPath = path.join(process.env.HOME || '/home/node', '.clawdbot', 'agents', 'main', 'sessions')
+    const files = await fs.readdir(sessionsPath)
+    
+    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+    
+    // Count files modified today
+    let count = 0
+    for (const file of files.slice(-50)) { // Only check recent files
+      if (file.endsWith('.jsonl')) {
+        try {
+          const stat = await fs.stat(path.join(sessionsPath, file))
+          if (stat.mtime.toISOString().slice(0, 10) === today) {
+            count++
+          }
+        } catch (e) {
+          // Ignore file errors
+        }
+      }
+    }
+    
+    return count
+  } catch (err) {
+    return 0
+  }
+}
+
+// GET /api/agents/:name - Agent profile with soul and working excerpts
+app.get('/api/agents/:name', async (req, res) => {
+  try {
+    const { name } = req.params
+    const agentKey = name.toLowerCase()
+    
+    // Check if agent exists
+    const meta = AGENT_META[agentKey]
+    if (!meta) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+    
+    const [soulExcerpt, workingExcerpt, status, currentTask, lastHeartbeat, sessionsToday] = await Promise.all([
+      getSoulExcerpt(agentKey),
+      getWorkingExcerpt(agentKey),
+      getAgentStatus(agentKey),
+      getAgentTask(agentKey),
+      getLastHeartbeat(agentKey),
+      getSessionsToday(agentKey),
+    ])
+    
+    res.json({
+      name: name.toUpperCase(),
+      role: meta.role,
+      emoji: meta.emoji,
+      color: meta.color,
+      status,
+      currentTask,
+      soulExcerpt,
+      workingExcerpt,
+      lastHeartbeat,
+      sessionsToday,
+    })
+  } catch (err) {
+    console.error('Error fetching agent profile:', err)
+    res.status(500).json({ error: 'Failed to fetch agent profile' })
+  }
+})
+
+// GET /api/agents/:name/tasks - Tasks assigned to agent
+app.get('/api/agents/:name/tasks', async (req, res) => {
+  try {
+    const { name } = req.params
+    const agentName = name.toUpperCase()
+    
+    const tasks = []
+    
+    // Read active missions
+    try {
+      const activePath = path.join(MISSION_CONTROL_PATH, 'active')
+      const files = await fs.readdir(activePath)
+      
+      for (const file of files) {
+        if (!file.endsWith('.md')) continue
+        
+        const content = await fs.readFile(path.join(activePath, file), 'utf-8')
+        const mission = parseMissionFile(content, file)
+        
+        // Check if assigned to this agent (via frontmatter or filename)
+        if (mission.agent === agentName || 
+            file.toLowerCase().startsWith(name.toLowerCase() + '-')) {
+          tasks.push(mission)
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error(`Error reading tasks for ${name}:`, err.message)
+      }
+    }
+    
+    res.json({ tasks })
+  } catch (err) {
+    console.error('Error fetching agent tasks:', err)
+    res.status(500).json({ error: 'Failed to fetch agent tasks' })
+  }
+})
+
+// GET /api/agents/:name/crons - Cron jobs related to agent
+app.get('/api/agents/:name/crons', async (req, res) => {
+  try {
+    const { name } = req.params
+    const agentNameLower = name.toLowerCase()
+    const agentNameUpper = name.toUpperCase()
+    
+    const crons = []
+    
+    try {
+      const cronContent = await fs.readFile(CRON_PATH, 'utf-8')
+      const cronData = JSON.parse(cronContent)
+      
+      for (const job of cronData.jobs || []) {
+        // Check if this cron mentions the agent
+        const jobStr = JSON.stringify(job).toLowerCase()
+        
+        if (jobStr.includes(agentNameLower) || 
+            job.name?.toLowerCase().includes(agentNameLower) ||
+            job.payload?.message?.toLowerCase().includes(agentNameLower)) {
+          crons.push({
+            id: job.id,
+            name: job.name,
+            enabled: job.enabled,
+            schedule: job.schedule,
+            expr: job.schedule?.expr,
+            tz: job.schedule?.tz,
+            nextRun: job.state?.nextRunAtMs,
+            lastRun: job.state?.lastRunAtMs,
+            lastStatus: job.state?.lastStatus,
+          })
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error(`Error reading crons for ${name}:`, err.message)
+      }
+    }
+    
+    res.json({ crons })
+  } catch (err) {
+    console.error('Error fetching agent crons:', err)
+    res.status(500).json({ error: 'Failed to fetch agent crons' })
+  }
+})
+
 // Serve static files from dist/ in production
 const distPath = path.join(__dirname, '..', 'dist')
 app.use(express.static(distPath))

@@ -6,6 +6,7 @@ import LiveFeed from './components/LiveFeed'
 import MobileNav from './components/MobileNav'
 import TaskDetailModal from './components/TaskDetailModal'
 import CreateTaskModal from './components/CreateTaskModal'
+import AgentProfilePanel from './components/AgentProfilePanel'
 import useWebSocket from './hooks/useWebSocket'
 
 function App() {
@@ -24,6 +25,10 @@ function App() {
   const [selectedTaskColumn, setSelectedTaskColumn] = useState(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  
+  // Agent profile panel state
+  const [selectedAgent, setSelectedAgent] = useState(null)
+  const [isAgentProfileOpen, setIsAgentProfileOpen] = useState(false)
   
   const { isConnected, lastMessage, connectionStatus } = useWebSocket()
 
@@ -128,6 +133,19 @@ function App() {
     }))
   }, [])
 
+  // Agent profile handlers
+  const handleAgentClick = useCallback((agent) => {
+    setSelectedAgent(agent)
+    setIsAgentProfileOpen(true)
+    // Close sidebar on mobile when agent is clicked
+    setSidebarOpen(false)
+  }, [])
+
+  const handleCloseAgentProfile = useCallback(() => {
+    setIsAgentProfileOpen(false)
+    setSelectedAgent(null)
+  }, [])
+
   // Handle WebSocket messages
   useEffect(() => {
     if (!lastMessage) return
@@ -226,7 +244,7 @@ function App() {
       {/* Desktop layout */}
       <div className="hidden md:flex flex-1 overflow-hidden">
         {/* Left Sidebar - Agents */}
-        <AgentPanel agents={agents} loading={loading} />
+        <AgentPanel agents={agents} loading={loading} onAgentClick={handleAgentClick} />
         
         {/* Center - Mission Queue */}
         <MissionQueue missions={missions} loading={loading} onTaskClick={handleTaskClick} />
@@ -244,13 +262,14 @@ function App() {
             loading={loading} 
             isMobile={true}
             onClose={() => setSidebarOpen(false)}
+            onAgentClick={handleAgentClick}
           />
         </div>
 
         {/* Mobile content area - switches based on activeView */}
         <div className="flex-1 overflow-auto main-content">
           {activeView === 'agents' && (
-            <AgentPanel agents={agents} loading={loading} isMobile={true} inline={true} />
+            <AgentPanel agents={agents} loading={loading} isMobile={true} inline={true} onAgentClick={handleAgentClick} />
           )}
           {activeView === 'missions' && (
             <MissionQueue missions={missions} loading={loading} isMobile={true} onTaskClick={handleTaskClick} />
@@ -278,6 +297,15 @@ function App() {
         isOpen={isCreateModalOpen}
         onClose={handleCloseCreateModal}
         onSubmit={handleTaskCreated}
+        apiUrl={API_URL}
+      />
+
+      {/* Agent Profile Panel */}
+      <AgentProfilePanel
+        agent={selectedAgent}
+        isOpen={isAgentProfileOpen}
+        onClose={handleCloseAgentProfile}
+        onTaskClick={handleTaskClick}
         apiUrl={API_URL}
       />
     </div>
