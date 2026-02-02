@@ -4,6 +4,7 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'fs/promises'
 import path from 'path'
+import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import { watch } from 'chokidar'
 import http from 'http'
@@ -361,6 +362,152 @@ app.get('/api/agents', async (req, res) => {
   } catch (err) {
     console.error('Error fetching agents:', err)
     res.json({ agents: [] })
+  }
+})
+
+// POST /api/missions - Create a new mission
+app.post('/api/missions', async (req, res) => {
+  try {
+    const { title, description, assigned_to, priority = 'medium', status = 'queue', tags = [] } = req.body
+    
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' })
+    }
+    
+    // Generate slug from title
+    const slug = title.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 50)
+    
+    const id = crypto.randomUUID()
+    const timestamp = new Date().toISOString()
+    const filename = `${assigned_to?.toLowerCase() || 'task'}-${slug}.md`
+    
+    // Create frontmatter and content
+    const content = `---
+id: ${id}
+title: ${title}
+assigned_to: ${assigned_to || 'unassigned'}
+status: ${status}
+priority: ${priority}
+created_at: ${timestamp}
+updated_at: ${timestamp}
+created_by: human
+tags: [${tags.join(', ')}]
+---
+
+# ${title}
+
+## Description
+${description || 'No description provided.'}
+
+## Status
+⏳ In queue - awaiting assignment
+`
+    
+    // Write file to active directory
+    const activePath = path.join(MISSION_CONTROL_PATH, 'active')
+    await fs.mkdir(activePath, { recursive: true })
+    await fs.writeFile(path.join(activePath, filename), content, 'utf-8')
+    
+    // Return the created mission
+    const mission = {
+      id: filename,
+      title: title.slice(0, 50),
+      description: description?.slice(0, 80) || '',
+      status: status,
+      priority,
+      agent: assigned_to?.toUpperCase() || null,
+      tags,
+      created: 'just now'
+    }
+    
+    // Broadcast to WebSocket clients
+    broadcast({
+      type: 'mission:new',
+      payload: mission
+    })
+    
+    // Also add to feed
+    broadcast({
+      type: 'feed:activity',
+      payload: {
+        id: `new-mission-${Date.now()}`,
+        agent: 'HUMAN',
+        action: 'created',
+        target: title.slice(0, 40),
+        time: 'just now',
+        type: 'task'
+      }
+    })
+    
+    console.log(`Created mission: ${filename}`)
+    res.status(201).json(mission)
+  } catch (err) {
+    console.error('Error creating mission:', err)
+    res.status(500).json({ error: 'Failed to create mission' })
+  }
+})
+
+// POST /api/missions/:id/complete - Mark a mission as complete
+app.post('/api/missions/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params
+    const filename = id.endsWith('.md') ? id : `${id}.md`
+    
+    const activePath = path.join(MISSION_CONTROL_PATH, 'active', filename)
+    const completedPath = path.join(MISSION_CONTROL_PATH, 'completed', filename)
+    
+    // Check if file exists in active
+    try {
+      await fs.access(activePath)
+    } catch (err) {
+      return res.status(404).json({ error: 'Mission not found' })
+    }
+    
+    // Read the file and update status
+    let content = await fs.readFile(activePath, 'utf-8')
+    const timestamp = new Date().toISOString()
+    
+    // Update frontmatter status
+    content = content.replace(/status:\s*\w+/i, 'status: done')
+    content = content.replace(/updated_at:\s*.+/i, `updated_at: ${timestamp}`)
+    
+    // Add completion note
+    if (!content.includes('## Completed')) {
+      content += `\n\n## Completed\n✅ Marked complete at ${timestamp}\n`
+    }
+    
+    // Move file to completed directory
+    await fs.mkdir(path.join(MISSION_CONTROL_PATH, 'completed'), { recursive: true })
+    await fs.writeFile(completedPath, content, 'utf-8')
+    await fs.unlink(activePath)
+    
+    // Broadcast completion
+    broadcast({
+      type: 'mission:complete',
+      payload: { id: filename }
+    })
+    
+    // Add to feed
+    broadcast({
+      type: 'feed:activity',
+      payload: {
+        id: `complete-${Date.now()}`,
+        agent: 'HUMAN',
+        action: 'completed',
+        target: filename.replace('.md', ''),
+        time: 'just now',
+        type: 'task'
+      }
+    })
+    
+    console.log(`Completed mission: ${filename}`)
+    res.json({ success: true, id: filename })
+  } catch (err) {
+    console.error('Error completing mission:', err)
+    res.status(500).json({ error: 'Failed to complete mission' })
   }
 })
 
